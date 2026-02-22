@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
-import { User, Book } from "./types";
-import { usersStore, emailIndex, booksStore, isbnIndex } from "./store";
+import { User, Book, Coupon } from "./types";
+import { usersStore, emailIndex, booksStore, isbnIndex, accountsStore, couponsStore, couponCodeIndex } from "./store";
 
 const ADMIN_EMAIL = "admin@bookstore.com";
 const ADMIN_PASS  = "admin123";
@@ -24,6 +24,39 @@ const SAMPLE_BOOKS: Omit<Book, "id" | "createdAt" | "updatedAt">[] = [
   { title: "The Catcher in the Rye", author: "J.D. Salinger", genre: "Fiction", price: 9.99, stock: 20, description: "A classic coming-of-age story.", isbn: "9780316769174" },
 ];
 
+const SAMPLE_COUPONS: Omit<Coupon, "id" | "usedCount" | "createdAt">[] = [
+  {
+    code: "WELCOME10",
+    type: "percentage",
+    value: 10,
+    description: "10% off your first order",
+    minOrderAmount: 0,
+    maxUses: null,
+    isActive: true,
+    expiresAt: null,
+  },
+  {
+    code: "SAVE5",
+    type: "fixed",
+    value: 5,
+    description: "$5 off orders over $20",
+    minOrderAmount: 20,
+    maxUses: null,
+    isActive: true,
+    expiresAt: null,
+  },
+  {
+    code: "HALFOFF",
+    type: "percentage",
+    value: 50,
+    description: "50% off — limited to 10 uses",
+    minOrderAmount: 0,
+    maxUses: 10,
+    isActive: true,
+    expiresAt: null,
+  },
+];
+
 export async function seedData(): Promise<void> {
   // Create admin user if not exists
   if (!emailIndex.has(ADMIN_EMAIL)) {
@@ -38,6 +71,7 @@ export async function seedData(): Promise<void> {
     };
     usersStore.set(admin.id, admin);
     emailIndex.set(ADMIN_EMAIL, admin.id);
+    accountsStore.set(admin.id, { userId: admin.id, balance: 0, updatedAt: new Date() });
     console.log(`[seed] Admin created — email: ${ADMIN_EMAIL} | password: ${ADMIN_PASS}`);
   }
 
@@ -50,5 +84,16 @@ export async function seedData(): Promise<void> {
       isbnIndex.set(book.isbn, book.id);
     }
     console.log(`[seed] ${SAMPLE_BOOKS.length} sample books added`);
+  }
+
+  // Create sample coupons if store is empty
+  if (couponsStore.size === 0) {
+    const now = new Date();
+    for (const data of SAMPLE_COUPONS) {
+      const coupon: Coupon = { id: uuidv4(), ...data, usedCount: 0, createdAt: now };
+      couponsStore.set(coupon.id, coupon);
+      couponCodeIndex.set(coupon.code, coupon.id);
+    }
+    console.log(`[seed] ${SAMPLE_COUPONS.length} sample coupons added (WELCOME10, SAVE5, HALFOFF)`);
   }
 }

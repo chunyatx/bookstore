@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BookStore Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #eaeded; color: #0f1111; font-size: 14px; }
+    button { cursor: pointer; border: none; }
+
+    /* ── Navbar ── */
+    #navbar {
+      background: #131921; color: #fff;
+      display: flex; align-items: center; padding: 10px 20px; gap: 14px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-size: 20px; font-weight: bold; color: #ff9900; }
+    .logo span { color: #fff; font-size: 13px; margin-left: 6px; opacity: .7; }
+    .nav-back {
+      margin-left: auto; background: none; color: #fff;
+      border: 1px solid #555; border-radius: 3px; padding: 6px 12px; font-size: 13px;
+    }
+    .nav-back:hover { border-color: #fff; }
+    #nav-user { font-size: 13px; color: #ccc; }
+
+    /* ── Page ── */
+    #page { max-width: 1300px; margin: 0 auto; padding: 20px 16px; }
+    h1 { font-size: 22px; margin-bottom: 18px; color: #0f1111; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
+    .tab {
+      padding: 10px 24px; font-size: 14px; font-weight: bold;
+      background: none; color: #555; border: none; border-bottom: 3px solid transparent;
+      margin-bottom: -2px; cursor: pointer;
+    }
+    .tab:hover { color: #0f1111; }
+    .tab.active { color: #c45500; border-bottom-color: #c45500; }
+
+    /* ── Cards / tables ── */
+    .panel { background: #fff; border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
+    .panel-header {
+      background: #f7f8f9; padding: 12px 16px;
+      border-bottom: 1px solid #ddd; display: flex; align-items: center; gap: 12px;
+    }
+    .panel-header h2 { font-size: 16px; flex: 1; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f7f8f9; text-align: left; padding: 10px 14px; font-size: 12px; color: #555; border-bottom: 1px solid #ddd; white-space: nowrap; }
+    td { padding: 10px 14px; border-bottom: 1px solid #f0f2f2; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+
+    /* ── Status badges ── */
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 10px;
+      font-size: 11px; font-weight: bold; text-transform: uppercase;
+    }
+    .badge.pending   { background: #fff3cd; color: #856404; }
+    .badge.confirmed { background: #d1e7dd; color: #0a3622; }
+    .badge.shipped   { background: #cfe2ff; color: #084298; }
+    .badge.cancelled { background: #f8d7da; color: #842029; }
+    .badge.credit    { background: #d1e7dd; color: #0a3622; }
+    .badge.debit     { background: #f8d7da; color: #842029; }
+    .badge.order_payment { background: #fff3cd; color: #856404; }
+    .badge.refund    { background: #cfe2ff; color: #084298; }
+    .badge.active    { background: #d1e7dd; color: #0a3622; }
+    .badge.inactive  { background: #f8d7da; color: #842029; }
+    .badge.percentage { background: #e2d9f3; color: #432874; }
+    .badge.fixed     { background: #cfe2ff; color: #084298; }
+
+    /* ── Action buttons ── */
+    .btn {
+      padding: 5px 12px; border-radius: 3px; font-size: 12px; font-weight: bold;
+      border: 1px solid; cursor: pointer; white-space: nowrap;
+    }
+    .btn-green  { background: #d1e7dd; border-color: #0a3622; color: #0a3622; }
+    .btn-green:hover  { background: #badbcc; }
+    .btn-blue   { background: #cfe2ff; border-color: #084298; color: #084298; }
+    .btn-blue:hover   { background: #b6d4fe; }
+    .btn-red    { background: #f8d7da; border-color: #842029; color: #842029; }
+    .btn-red:hover    { background: #f1aeb5; }
+    .btn-amber  { background: #fff3cd; border-color: #856404; color: #856404; }
+    .btn-amber:hover  { background: #ffe69c; }
+    .btn-gap { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* ── Balance ── */
+    .balance { font-size: 15px; font-weight: bold; color: #067d62; }
+    .balance.negative { color: #b12704; }
+
+    /* ── Filter bar ── */
+    .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input {
+      padding: 6px 10px; border: 1px solid #a6a6a6; border-radius: 3px;
+      font-size: 13px; background: #fff;
+    }
+    .filter-bar label { font-size: 13px; color: #555; }
+
+    /* ── Expandable customer row ── */
+    .expand-row td { padding: 0; }
+    .expand-inner {
+      padding: 16px 20px; background: #f7f8f9;
+      border-bottom: 2px solid #ddd;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .expand-inner h4 { font-size: 13px; font-weight: bold; margin-bottom: 8px; color: #555; }
+    .mini-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .mini-table th { background: #eee; padding: 6px 10px; text-align: left; }
+    .mini-table td { padding: 6px 10px; border-bottom: 1px solid #eee; }
+    .mini-table tr:last-child td { border-bottom: none; }
+    .expand-toggle { cursor: pointer; color: #0066c0; font-size: 12px; }
+    .expand-toggle:hover { text-decoration: underline; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.5); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 6px; padding: 28px 32px;
+      width: 100%; max-width: 400px; position: relative;
+    }
+    .modal h2 { font-size: 18px; margin-bottom: 18px; }
+    .modal-close { position: absolute; top: 12px; right: 16px; background: none; font-size: 20px; color: #555; }
+    .modal-close:hover { color: #000; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; }
+    .form-group input {
+      width: 100%; padding: 8px 10px;
+      border: 1px solid #a6a6a6; border-radius: 3px; font-size: 14px;
+    }
+    .form-group input:focus { outline: none; border-color: #e77600; box-shadow: 0 0 0 3px rgba(228,121,17,.25); }
+    .form-error { color: #b12704; font-size: 12px; margin-top: 4px; }
+    .form-submit {
+      width: 100%; background: #febd69; border: 1px solid #a88734;
+      border-radius: 3px; padding: 10px; font-size: 15px; font-weight: bold; margin-top: 6px;
+    }
+    .form-submit:hover { background: #f3a847; }
+    .modal-note { font-size: 12px; color: #555; margin-top: 10px; text-align: center; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: #232f3e; color: #fff; padding: 12px 24px; border-radius: 4px;
+      font-size: 14px; z-index: 500; opacity: 0; transition: opacity .3s;
+      pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+    #toast.success { background: #067d62; }
+    #toast.error   { background: #b12704; }
+
+    /* ── Empty state ── */
+    .empty { padding: 40px; text-align: center; color: #777; }
+  </style>
+</head>
+<body>
+
+<nav id="navbar">
+  <div class="logo">📚 BookStore <span>Admin Panel</span></div>
+  <span id="nav-user"></span>
+  <button class="nav-back" onclick="location.href='/'">← Back to Store</button>
+</nav>
+
+<div id="page">
+  <h1>Admin Dashboard</h1>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('customers')">👥 Customers</button>
+    <button class="tab" onclick="switchTab('orders')">📦 Orders</button>
+    <button class="tab" onclick="switchTab('coupons')">🏷️ Coupons</button>
+  </div>
+
+  <!-- Customers tab -->
+  <div id="tab-customers">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>All Customers</h2>
+        <button class="btn btn-amber" onclick="loadCustomers()">↻ Refresh</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Wallet Balance</th>
+            <th>Orders</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="customers-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Coupons tab -->
+  <div id="tab-coupons" style="display:none">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Coupon Codes</h2>
+        <button class="btn btn-green" onclick="openCreateCoupon()">＋ Create Coupon</button>
+        <button class="btn btn-amber" onclick="loadCoupons()">↻ Refresh</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Type</th>
+            <th>Value</th>
+            <th>Min Order</th>
+            <th>Uses</th>
+            <th>Expires</th>
+            <th>Status</th>
+            <th>Description</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="coupons-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Orders tab -->
+  <div id="tab-orders" style="display:none">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>All Orders</h2>
+        <div class="filter-bar">
+          <label>Status:</label>
+          <select id="order-status-filter" onchange="loadOrders()">
+            <option value="">All</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="shipped">Shipped</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <button class="btn btn-amber" onclick="loadOrders()">↻ Refresh</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="orders-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Create Coupon modal -->
+<div class="modal-overlay" id="coupon-modal">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeCouponModal()">✕</button>
+    <h2>🏷️ Create Coupon</h2>
+    <div class="form-group">
+      <label>Code</label>
+      <input id="cp-code" type="text" placeholder="e.g. SUMMER20" maxlength="20" style="text-transform:uppercase" />
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select id="cp-type" style="width:100%;padding:8px 10px;border:1px solid #a6a6a6;border-radius:3px;font-size:14px">
+        <option value="percentage">Percentage (%)</option>
+        <option value="fixed">Fixed Amount ($)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Value <span id="cp-value-hint" style="font-weight:normal;color:#555">(e.g. 10 for 10%)</span></label>
+      <input id="cp-value" type="number" min="0.01" step="0.01" placeholder="0" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input id="cp-description" type="text" placeholder="Short description" />
+    </div>
+    <div class="form-group">
+      <label>Minimum Order Amount ($) <span style="font-weight:normal;color:#555">— 0 for none</span></label>
+      <input id="cp-min" type="number" min="0" step="0.01" value="0" />
+    </div>
+    <div class="form-group">
+      <label>Max Uses <span style="font-weight:normal;color:#555">— leave blank for unlimited</span></label>
+      <input id="cp-maxuses" type="number" min="1" step="1" placeholder="Unlimited" />
+    </div>
+    <div class="form-group">
+      <label>Expiry Date <span style="font-weight:normal;color:#555">— leave blank for no expiry</span></label>
+      <input id="cp-expires" type="datetime-local" />
+    </div>
+    <div class="form-error" id="coupon-modal-error"></div>
+    <button class="form-submit" onclick="submitCreateCoupon()">Create Coupon</button>
+  </div>
+</div>
+
+<!-- Balance adjustment modal -->
+<div class="modal-overlay" id="balance-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h2 id="modal-title">Adjust Balance</h2>
+    <div class="form-group">
+      <label>Amount (USD)</label>
+      <input id="modal-amount" type="number" min="0.01" step="0.01" placeholder="0.00" />
+    </div>
+    <div class="form-group">
+      <label>Note</label>
+      <input id="modal-note" type="text" placeholder="Reason for adjustment" />
+    </div>
+    <div class="form-error" id="modal-error"></div>
+    <button class="form-submit" onclick="submitBalance()">Confirm</button>
+    <p class="modal-note" id="modal-customer-name"></p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  const token = localStorage.getItem('bs_token');
+  const currentUser = JSON.parse(localStorage.getItem('bs_user') || 'null');
+
+  // Guard: redirect if not admin
+  if (!token || !currentUser || currentUser.role !== 'admin') {
+    location.href = '/';
+  }
+
+  document.getElementById('nav-user').textContent = `Hello, ${currentUser?.name ?? ''}`;
+
+  let modalMode   = '';   // 'credit' | 'debit'
+  let modalUserId = '';
+  let expandedUserId = '';
+
+  // ── API helper ─────────────────────────────────────────────────────────────
+  async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token } };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch('/api' + path, opts);
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'show' + (type ? ' ' + type : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = ''; }, 2800);
+  }
+
+  // ── Tabs ───────────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-customers').style.display = tab === 'customers' ? '' : 'none';
+    document.getElementById('tab-orders').style.display    = tab === 'orders'    ? '' : 'none';
+    document.getElementById('tab-coupons').style.display   = tab === 'coupons'   ? '' : 'none';
+    if (tab === 'orders')  loadOrders();
+    if (tab === 'coupons') loadCoupons();
+  }
+
+  // ── Customers ──────────────────────────────────────────────────────────────
+  async function loadCustomers() {
+    const { ok, data } = await api('GET', '/admin/customers');
+    const tbody = document.getElementById('customers-tbody');
+    if (!ok || !data.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">No customers registered yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(c => `
+      <tr id="row-${c.id}">
+        <td><span class="expand-toggle" onclick="toggleCustomer('${c.id}')">▶ Details</span></td>
+        <td><strong>${esc(c.name)}</strong></td>
+        <td>${esc(c.email)}</td>
+        <td><span class="balance ${c.balance < 0 ? 'negative' : ''}">$${c.balance.toFixed(2)}</span></td>
+        <td>${c.orderCount}</td>
+        <td>
+          <div class="btn-gap">
+            <button class="btn btn-green" onclick="openCredit('${c.id}','${esc(c.name)}')">Top Up</button>
+            <button class="btn btn-red"   onclick="openDebit('${c.id}','${esc(c.name)}')">Deduct</button>
+          </div>
+        </td>
+      </tr>
+      <tr id="expand-${c.id}" class="expand-row" style="display:none">
+        <td colspan="6"><div class="expand-inner" id="expand-inner-${c.id}"></div></td>
+      </tr>`).join('');
+  }
+
+  async function toggleCustomer(userId) {
+    const row = document.getElementById(`expand-${userId}`);
+    const toggle = document.querySelector(`#row-${userId} .expand-toggle`);
+    if (row.style.display !== 'none') {
+      row.style.display = 'none';
+      toggle.textContent = '▶ Details';
+      return;
+    }
+    row.style.display = '';
+    toggle.textContent = '▼ Details';
+    const inner = document.getElementById(`expand-inner-${userId}`);
+    inner.innerHTML = '<p style="padding:12px;color:#555">Loading…</p>';
+
+    const { ok, data } = await api('GET', `/admin/customers/${userId}`);
+    if (!ok) { inner.innerHTML = '<p style="padding:12px;color:#b12704">Failed to load</p>'; return; }
+
+    const txRows = data.transactions.length
+      ? data.transactions.map(t => `
+          <tr>
+            <td>${new Date(t.createdAt).toLocaleString()}</td>
+            <td><span class="badge ${t.type}">${t.type.replace('_',' ')}</span></td>
+            <td>${t.type === 'credit' || t.type === 'refund' ? '+' : '-'}$${t.amount.toFixed(2)}</td>
+            <td>$${t.balanceAfter.toFixed(2)}</td>
+            <td>${esc(t.description)}</td>
+          </tr>`).join('')
+      : '<tr><td colspan="5" style="color:#777;padding:8px">No transactions yet.</td></tr>';
+
+    const orderRows = data.orders.length
+      ? data.orders.map(o => `
+          <tr>
+            <td>${o.id.slice(0,8)}</td>
+            <td>${new Date(o.createdAt).toLocaleDateString()}</td>
+            <td>$${o.totalAmount.toFixed(2)}</td>
+            <td><span class="badge ${o.status}">${o.status}</span></td>
+          </tr>`).join('')
+      : '<tr><td colspan="4" style="color:#777;padding:8px">No orders yet.</td></tr>';
+
+    inner.innerHTML = `
+      <div>
+        <h4>Transaction History (last 50)</h4>
+        <table class="mini-table">
+          <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Balance After</th><th>Note</th></tr></thead>
+          <tbody>${txRows}</tbody>
+        </table>
+      </div>
+      <div>
+        <h4>Orders</h4>
+        <table class="mini-table">
+          <thead><tr><th>ID</th><th>Date</th><th>Total</th><th>Status</th></tr></thead>
+          <tbody>${orderRows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // ── Balance modal ──────────────────────────────────────────────────────────
+  function openCredit(userId, name) {
+    modalMode = 'credit'; modalUserId = userId;
+    document.getElementById('modal-title').textContent = '💰 Top Up Wallet';
+    document.getElementById('modal-customer-name').textContent = `Customer: ${name}`;
+    document.getElementById('modal-amount').value = '';
+    document.getElementById('modal-note').value = '';
+    document.getElementById('modal-error').textContent = '';
+    document.getElementById('balance-modal').classList.add('open');
+  }
+
+  function openDebit(userId, name) {
+    modalMode = 'debit'; modalUserId = userId;
+    document.getElementById('modal-title').textContent = '💸 Deduct from Wallet';
+    document.getElementById('modal-customer-name').textContent = `Customer: ${name}`;
+    document.getElementById('modal-amount').value = '';
+    document.getElementById('modal-note').value = '';
+    document.getElementById('modal-error').textContent = '';
+    document.getElementById('balance-modal').classList.add('open');
+  }
+
+  function closeModal() { document.getElementById('balance-modal').classList.remove('open'); }
+
+  async function submitBalance() {
+    const amount = parseFloat(document.getElementById('modal-amount').value);
+    const description = document.getElementById('modal-note').value.trim();
+    if (!amount || amount <= 0) { document.getElementById('modal-error').textContent = 'Enter a valid amount'; return; }
+    if (!description) { document.getElementById('modal-error').textContent = 'Note is required'; return; }
+
+    const path = `/admin/customers/${modalUserId}/${modalMode}`;
+    const { ok, data } = await api('POST', path, { amount, description });
+    if (!ok) {
+      document.getElementById('modal-error').textContent = data.error || 'Failed';
+      return;
+    }
+    closeModal();
+    showToast(`Balance updated. New balance: $${data.balance.toFixed(2)}`, 'success');
+    loadCustomers();
+  }
+
+  // ── Orders ─────────────────────────────────────────────────────────────────
+  async function loadOrders() {
+    const status = document.getElementById('order-status-filter').value;
+    const query = status ? `?status=${status}` : '';
+    const { ok, data } = await api('GET', `/admin/orders${query}`);
+    const tbody = document.getElementById('orders-tbody');
+    if (!ok || !data.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">No orders found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(o => {
+      const actions = [];
+      if (o.status === 'pending')   actions.push(`<button class="btn btn-green" onclick="advanceStatus('${o.id}','confirmed')">Confirm</button>`);
+      if (o.status === 'confirmed') actions.push(`<button class="btn btn-blue"  onclick="advanceStatus('${o.id}','shipped')">Ship</button>`);
+      if (o.status === 'pending' || o.status === 'confirmed')
+        actions.push(`<button class="btn btn-red" onclick="doRefund('${o.id}')">Refund</button>`);
+      return `
+        <tr>
+          <td style="font-family:monospace;font-size:12px">${o.id.slice(0,8)}</td>
+          <td>${esc(o.customerName ?? 'Unknown')}</td>
+          <td>${new Date(o.createdAt).toLocaleDateString()}</td>
+          <td>${o.items.length} item${o.items.length !== 1 ? 's' : ''}</td>
+          <td><strong>$${o.totalAmount.toFixed(2)}</strong></td>
+          <td><span class="badge ${o.status}">${o.status}</span></td>
+          <td><div class="btn-gap">${actions.join('') || '<span style="color:#aaa;font-size:12px">—</span>'}</div></td>
+        </tr>`;
+    }).join('');
+  }
+
+  async function advanceStatus(orderId, status) {
+    const { ok, data } = await api('PATCH', `/admin/orders/${orderId}/status`, { status });
+    if (!ok) { showToast(data.error || 'Failed to update status', 'error'); return; }
+    showToast(`Order ${orderId.slice(0,8)} → ${status}`, 'success');
+    loadOrders();
+  }
+
+  async function doRefund(orderId) {
+    if (!confirm(`Refund order ${orderId.slice(0,8)}? This will cancel the order and return funds to the customer's wallet.`)) return;
+    const { ok, data } = await api('POST', `/admin/orders/${orderId}/refund`);
+    if (!ok) { showToast(data.error || 'Refund failed', 'error'); return; }
+    showToast(`Refund issued. Customer balance: $${data.balance.toFixed(2)}`, 'success');
+    loadOrders();
+  }
+
+  // ── Coupons ────────────────────────────────────────────────────────────────
+  async function loadCoupons() {
+    const { ok, data } = await api('GET', '/admin/coupons');
+    const tbody = document.getElementById('coupons-tbody');
+    if (!ok) { tbody.innerHTML = `<tr><td colspan="9" class="empty">Failed to load coupons.</td></tr>`; return; }
+    if (!data.length) { tbody.innerHTML = `<tr><td colspan="9" class="empty">No coupons created yet.</td></tr>`; return; }
+    tbody.innerHTML = data.map(c => {
+      const usageText = c.maxUses !== null ? `${c.usedCount} / ${c.maxUses}` : `${c.usedCount} / ∞`;
+      const expiryText = c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : '—';
+      const actionBtn = c.isActive
+        ? `<button class="btn btn-red" onclick="toggleCoupon('${c.code}', false)">Deactivate</button>`
+        : `<button class="btn btn-green" onclick="toggleCoupon('${c.code}', true)">Activate</button>`;
+      return `
+        <tr>
+          <td><strong style="font-family:monospace">${esc(c.code)}</strong></td>
+          <td><span class="badge ${c.type}">${c.type}</span></td>
+          <td>${c.type === 'percentage' ? c.value + '%' : '$' + c.value.toFixed(2)}</td>
+          <td>${c.minOrderAmount > 0 ? '$' + c.minOrderAmount.toFixed(2) : '—'}</td>
+          <td>${usageText}</td>
+          <td>${expiryText}</td>
+          <td><span class="badge ${c.isActive ? 'active' : 'inactive'}">${c.isActive ? 'Active' : 'Inactive'}</span></td>
+          <td style="color:#555;font-size:12px">${esc(c.description)}</td>
+          <td>${actionBtn}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function openCreateCoupon() {
+    document.getElementById('cp-code').value = '';
+    document.getElementById('cp-type').value = 'percentage';
+    document.getElementById('cp-value').value = '';
+    document.getElementById('cp-description').value = '';
+    document.getElementById('cp-min').value = '0';
+    document.getElementById('cp-maxuses').value = '';
+    document.getElementById('cp-expires').value = '';
+    document.getElementById('coupon-modal-error').textContent = '';
+    updateValueHint();
+    document.getElementById('coupon-modal').classList.add('open');
+  }
+
+  function closeCouponModal() { document.getElementById('coupon-modal').classList.remove('open'); }
+
+  function updateValueHint() {
+    const type = document.getElementById('cp-type').value;
+    document.getElementById('cp-value-hint').textContent =
+      type === 'percentage' ? '(1–100 for %)' : '(dollar amount)';
+  }
+  document.getElementById('cp-type').addEventListener('change', updateValueHint);
+
+  async function submitCreateCoupon() {
+    const code        = document.getElementById('cp-code').value.trim().toUpperCase();
+    const type        = document.getElementById('cp-type').value;
+    const value       = parseFloat(document.getElementById('cp-value').value);
+    const description = document.getElementById('cp-description').value.trim();
+    const minOrder    = parseFloat(document.getElementById('cp-min').value) || 0;
+    const maxUsesRaw  = document.getElementById('cp-maxuses').value.trim();
+    const maxUses     = maxUsesRaw ? parseInt(maxUsesRaw) : null;
+    const expiresRaw  = document.getElementById('cp-expires').value;
+    const expiresAt   = expiresRaw ? new Date(expiresRaw).toISOString() : null;
+
+    const errEl = document.getElementById('coupon-modal-error');
+    if (!code) { errEl.textContent = 'Code is required'; return; }
+    if (!value || value <= 0) { errEl.textContent = 'Value must be positive'; return; }
+    if (type === 'percentage' && value > 100) { errEl.textContent = 'Percentage cannot exceed 100'; return; }
+    if (!description) { errEl.textContent = 'Description is required'; return; }
+
+    const payload = { code, type, value, description, minOrderAmount: minOrder, maxUses, expiresAt };
+    const { ok, data } = await api('POST', '/admin/coupons', payload);
+    if (!ok) {
+      errEl.textContent = Array.isArray(data.error)
+        ? data.error.map(e => e.message).join(', ')
+        : (data.error || 'Failed to create coupon');
+      return;
+    }
+    closeCouponModal();
+    showToast(`Coupon ${data.code} created!`, 'success');
+    loadCoupons();
+  }
+
+  async function toggleCoupon(code, activate) {
+    const action = activate ? 'activate' : 'deactivate';
+    const { ok, data } = await api('PATCH', `/admin/coupons/${code}/${action}`);
+    if (!ok) { showToast(data.error || 'Failed', 'error'); return; }
+    showToast(`Coupon ${code} ${activate ? 'activated' : 'deactivated'}`, 'success');
+    loadCoupons();
+  }
+
+  // ── Utils ──────────────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────────────────
+  loadCustomers();
+</script>
+</body>
+</html>

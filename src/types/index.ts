@@ -33,6 +33,7 @@ export interface CartItem {
 export interface Cart {
   userId: string;
   items: CartItem[];
+  couponCode?: string; // applied coupon code
   updatedAt: Date;
 }
 
@@ -49,10 +50,52 @@ export interface Order {
   id: string;
   userId: string;
   items: OrderItem[];
-  totalAmount: number;
+  subtotal: number;        // pre-discount total
+  discountAmount: number;  // 0 if no coupon
+  totalAmount: number;     // subtotal - discountAmount
+  couponCode?: string;     // applied coupon code
   status: OrderStatus;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// ─── Coupons ──────────────────────────────────────────────────────────────────
+
+export type CouponType = "percentage" | "fixed";
+
+export interface Coupon {
+  id: string;
+  code: string;           // uppercase, unique
+  type: CouponType;
+  value: number;          // % amount (0-100) for percentage, dollar amount for fixed
+  description: string;
+  minOrderAmount: number; // minimum subtotal to use (0 = no minimum)
+  maxUses: number | null; // null = unlimited
+  usedCount: number;
+  isActive: boolean;
+  expiresAt: Date | null; // null = no expiry
+  createdAt: Date;
+}
+
+// ─── Wallet / Accounts ────────────────────────────────────────────────────────
+
+export interface Account {
+  userId: string;
+  balance: number;    // current wallet balance in USD
+  updatedAt: Date;
+}
+
+export type TransactionType = "credit" | "debit" | "order_payment" | "refund";
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  type: TransactionType;
+  amount: number;        // always positive; type describes direction
+  description: string;
+  orderId?: string;      // set for order_payment and refund
+  balanceAfter: number;  // snapshot of balance after this tx
+  createdAt: Date;
 }
 
 // ─── JWT Payload ──────────────────────────────────────────────────────────────
@@ -116,4 +159,28 @@ export const AddToCartSchema = z.object({
 
 export const UpdateCartItemSchema = z.object({
   quantity: z.number().int().nonnegative(),
+});
+
+export const CreateCouponSchema = z.object({
+  code: z.string().min(3).max(20).transform((v) => v.toUpperCase()),
+  type: z.enum(["percentage", "fixed"]),
+  value: z.number().positive(),
+  description: z.string().min(1),
+  minOrderAmount: z.number().nonnegative().default(0),
+  maxUses: z.number().int().positive().nullable().default(null),
+  expiresAt: z.string().datetime().nullable().default(null)
+    .transform((v) => (v ? new Date(v) : null)),
+});
+
+export const ApplyCouponSchema = z.object({
+  code: z.string().min(1).transform((v) => v.toUpperCase()),
+});
+
+export const AdjustBalanceSchema = z.object({
+  amount: z.number().positive(),
+  description: z.string().min(1),
+});
+
+export const UpdateOrderStatusSchema = z.object({
+  status: z.enum(["confirmed", "shipped"]),
 });

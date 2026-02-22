@@ -6,6 +6,8 @@ import { authRouter } from "./routes/auth.routes";
 import { booksRouter } from "./routes/books.routes";
 import { cartRouter } from "./routes/cart.routes";
 import { ordersRouter } from "./routes/orders.routes";
+import { adminRouter } from "./routes/admin.routes";
+import { accountRouter } from "./routes/account.routes";
 
 export const app = express();
 
@@ -22,6 +24,8 @@ app.use("/api/auth", authRouter);
 app.use("/api/books", booksRouter);
 app.use("/api/cart", cartRouter);
 app.use("/api/orders", ordersRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/account", accountRouter);
 
 // Serve the frontend — express.static handles index.html automatically
 app.use(express.static(path.join(__dirname, "..", "public")));

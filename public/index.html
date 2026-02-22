@@ -346,7 +346,50 @@
       border-top: 1px solid #eee;
       background: #f7f8f9;
     }
-    #cart-total { font-size: 16px; font-weight: bold; margin-bottom: 12px; }
+    #coupon-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    #coupon-input {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid #a6a6a6;
+      border-radius: 3px;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+    #coupon-input:focus { outline: none; border-color: #e77600; }
+    #apply-coupon-btn {
+      background: #fff;
+      border: 1px solid #a88734;
+      border-radius: 3px;
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: bold;
+      color: #c45500;
+    }
+    #apply-coupon-btn:hover { background: #fef9ee; }
+    #coupon-applied {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #067d62;
+    }
+    #remove-coupon-btn {
+      background: none;
+      font-size: 11px;
+      color: #b12704;
+      cursor: pointer;
+      border: none;
+      text-decoration: underline;
+    }
+    #cart-totals { margin-bottom: 12px; }
+    #cart-subtotal { font-size: 13px; color: #555; margin-bottom: 3px; }
+    #cart-discount-row { font-size: 13px; color: #067d62; margin-bottom: 3px; display: none; }
+    #cart-total { font-size: 16px; font-weight: bold; }
     #checkout-btn {
       width: 100%;
       background: #febd69;
@@ -525,7 +568,22 @@
   </div>
   <div id="cart-items"></div>
   <div id="cart-footer">
-    <div id="cart-total"></div>
+    <!-- Coupon input -->
+    <div id="coupon-row">
+      <input id="coupon-input" type="text" placeholder="Coupon code" maxlength="20" />
+      <button id="apply-coupon-btn" onclick="applyCartCoupon()">Apply</button>
+    </div>
+    <!-- Applied coupon badge -->
+    <div id="coupon-applied">
+      🏷️ <span id="coupon-label"></span>
+      <button id="remove-coupon-btn" onclick="removeCartCoupon()">Remove</button>
+    </div>
+    <!-- Totals -->
+    <div id="cart-totals">
+      <div id="cart-subtotal"></div>
+      <div id="cart-discount-row"></div>
+      <div id="cart-total"></div>
+    </div>
     <button id="checkout-btn" onclick="checkout()">Proceed to Checkout</button>
   </div>
 </div>
@@ -792,12 +850,21 @@
     const el = document.getElementById('cart-items');
     if (!cart.items.length) {
       el.innerHTML = '<p id="cart-empty">Your cart is empty.</p>';
+      document.getElementById('cart-subtotal').textContent = '';
+      document.getElementById('cart-discount-row').style.display = 'none';
       document.getElementById('cart-total').textContent = '';
+      document.getElementById('coupon-row').style.display = 'flex';
+      document.getElementById('coupon-applied').style.display = 'none';
       document.getElementById('checkout-btn').disabled = true;
       return;
     }
     document.getElementById('checkout-btn').disabled = false;
-    const total = cart.items.reduce((s, i) => s + i.priceAtAdd * i.quantity, 0);
+
+    const subtotal  = cart.subtotal  ?? cart.items.reduce((s, i) => s + i.priceAtAdd * i.quantity, 0);
+    const discount  = cart.discountAmount ?? 0;
+    const finalTotal = cart.finalTotal ?? subtotal;
+    const itemCount = cart.items.reduce((s,i)=>s+i.quantity,0);
+
     el.innerHTML = cart.items.map(i => `
       <div class="cart-item">
         <div class="cart-item-icon">📖</div>
@@ -812,7 +879,51 @@
           </div>
         </div>
       </div>`).join('');
-    document.getElementById('cart-total').innerHTML = `<strong>Subtotal (${cart.items.reduce((s,i)=>s+i.quantity,0)} items):</strong> $${total.toFixed(2)}`;
+
+    // Coupon badge
+    if (cart.coupon) {
+      document.getElementById('coupon-row').style.display = 'none';
+      document.getElementById('coupon-applied').style.display = 'flex';
+      document.getElementById('coupon-label').textContent =
+        `${cart.coupon.code} — −$${discount.toFixed(2)} (${cart.coupon.type === 'percentage' ? cart.coupon.value + '%' : '$' + cart.coupon.value} off)`;
+    } else {
+      document.getElementById('coupon-row').style.display = 'flex';
+      document.getElementById('coupon-applied').style.display = 'none';
+    }
+
+    // Totals
+    document.getElementById('cart-subtotal').textContent =
+      discount > 0 ? `Subtotal (${itemCount} items): $${subtotal.toFixed(2)}` : '';
+    if (discount > 0) {
+      document.getElementById('cart-discount-row').style.display = 'block';
+      document.getElementById('cart-discount-row').textContent = `Coupon discount: −$${discount.toFixed(2)}`;
+    } else {
+      document.getElementById('cart-discount-row').style.display = 'none';
+    }
+    document.getElementById('cart-total').innerHTML =
+      `<strong>Total (${itemCount} items):</strong> $${finalTotal.toFixed(2)}`;
+  }
+
+  async function applyCartCoupon() {
+    const code = document.getElementById('coupon-input').value.trim().toUpperCase();
+    if (!code) { showToast('Enter a coupon code', 'error'); return; }
+    if (!token) { openAuth('login'); return; }
+    const { ok, data } = await api('POST', '/cart/coupon', { code });
+    if (!ok) { showToast(data.error || 'Invalid coupon', 'error'); return; }
+    cart = data;
+    updateCartCount();
+    renderCartItems();
+    document.getElementById('coupon-input').value = '';
+    showToast(`Coupon ${code} applied! 🎉`, 'success');
+  }
+
+  async function removeCartCoupon() {
+    const { ok, data } = await api('DELETE', '/cart/coupon');
+    if (!ok) { showToast('Could not remove coupon', 'error'); return; }
+    cart = data;
+    updateCartCount();
+    renderCartItems();
+    showToast('Coupon removed');
   }
 
   function openCart() {
@@ -832,7 +943,10 @@
     cart = { items: [] };
     updateCartCount();
     closeCart();
-    showToast('Order placed! 🎉', 'success');
+    const msg = data.discountAmount > 0
+      ? `Order placed! Saved $${data.discountAmount.toFixed(2)} with coupon 🎉`
+      : 'Order placed! 🎉';
+    showToast(msg, 'success');
     loadBooks(); // refresh stock
   }
 
@@ -854,6 +968,7 @@
         </div>
         <div class="order-items-list">
           ${o.items.map(i => `<div class="order-item-row"><span>${esc(i.title)} × ${i.quantity}</span><span>$${(i.priceAtOrder * i.quantity).toFixed(2)}</span></div>`).join('')}
+          ${o.discountAmount > 0 ? `<div class="order-item-row" style="color:#067d62"><span>🏷️ Coupon (${esc(o.couponCode)})</span><span>−$${o.discountAmount.toFixed(2)}</span></div>` : ''}
         </div>
         ${o.status === 'pending' ? `<button class="order-cancel-btn" onclick="cancelOrder('${o.id}')">Cancel Order</button>` : ''}
       </div>`).join('');
