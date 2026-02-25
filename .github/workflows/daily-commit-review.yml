@@ -1,0 +1,91 @@
+name: Daily Commit Review
+
+on:
+  schedule:
+    # Runs every day at 5:00 PM UTC
+    - cron: '0 17 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  review-commits:
+    name: Review Recent Commits
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history needed for git log
+
+      - name: Get recent commits (last 24 hours)
+        id: commits
+        run: |
+          SINCE="$(date -d '24 hours ago' --utc '+%Y-%m-%dT%H:%M:%SZ')"
+          echo "Reviewing commits since: $SINCE"
+
+          COMMIT_LOG=$(git log --since="$SINCE" --pretty=format:"- %h %s (%an, %ar)" --no-merges)
+
+          if [ -z "$COMMIT_LOG" ]; then
+            echo "No commits in the last 24 hours."
+            echo "has_commits=false" >> $GITHUB_OUTPUT
+          else
+            echo "Commits found:"
+            echo "$COMMIT_LOG"
+            echo "has_commits=true" >> $GITHUB_OUTPUT
+
+            # Save to file for later steps
+            echo "$COMMIT_LOG" > recent_commits.txt
+          fi
+
+      - name: Show changed files
+        if: steps.commits.outputs.has_commits == 'true'
+        run: |
+          SINCE="$(date -d '24 hours ago' --utc '+%Y-%m-%dT%H:%M:%SZ')"
+          FIRST_COMMIT=$(git log --since="$SINCE" --no-merges --format="%H" | tail -1)
+
+          if [ -n "$FIRST_COMMIT" ]; then
+            echo "=== Files changed in the last 24 hours ==="
+            git diff --stat "$FIRST_COMMIT^" HEAD || git diff --stat "$FIRST_COMMIT" HEAD
+          fi
+
+      - name: Show full diff summary
+        if: steps.commits.outputs.has_commits == 'true'
+        run: |
+          SINCE="$(date -d '24 hours ago' --utc '+%Y-%m-%dT%H:%M:%SZ')"
+          FIRST_COMMIT=$(git log --since="$SINCE" --no-merges --format="%H" | tail -1)
+
+          if [ -n "$FIRST_COMMIT" ]; then
+            echo "=== Diff summary ==="
+            git log --since="$SINCE" --no-merges \
+              --pretty=format:"%n--- Commit: %h ---%n%B" \
+              --stat
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Daily Commit Review - $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          SINCE="$(date -d '24 hours ago' --utc '+%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT_COUNT=$(git log --since="$SINCE" --no-merges --oneline | wc -l)
+
+          echo "**Commits in the last 24 hours:** $COMMIT_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$COMMIT_COUNT" -gt 0 ]; then
+            echo "### Commits" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            git log --since="$SINCE" --pretty=format:"- %h %s (%an, %ar)" --no-merges >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            FIRST_COMMIT=$(git log --since="$SINCE" --no-merges --format="%H" | tail -1)
+            if [ -n "$FIRST_COMMIT" ]; then
+              echo "### Changed Files" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              git diff --stat "$FIRST_COMMIT^" HEAD 2>/dev/null || git diff --stat "$FIRST_COMMIT" HEAD >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "_No commits were made in the last 24 hours._" >> $GITHUB_STEP_SUMMARY
+          fi
