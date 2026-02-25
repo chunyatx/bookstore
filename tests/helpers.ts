@@ -9,8 +9,10 @@ import {
   cartsStore,
   ordersStore,
   userOrders,
+  couponsStore,
+  couponCodeIndex,
 } from "../src/store";
-import { Book, User } from "../src/types";
+import { Book, Coupon, User } from "../src/types";
 
 const JWT_SECRET = process.env["JWT_SECRET"] ?? "change-me-in-production";
 
@@ -23,6 +25,8 @@ export function clearStores(): void {
   cartsStore.clear();
   ordersStore.clear();
   userOrders.clear();
+  couponsStore.clear();
+  couponCodeIndex.clear();
 }
 
 /** Create a signed JWT for a user fixture. */
@@ -81,4 +85,28 @@ export function seedBook(overrides: Partial<Book> = {}): Book {
   booksStore.set(book.id, book);
   isbnIndex.set(book.isbn, book.id);
   return book;
+}
+
+/** Seed a coupon directly into the store. */
+export function seedCoupon(overrides: Partial<Coupon> = {}): Coupon {
+  const id = uuidv4();
+  const code = (overrides.code ?? `COUPON${id.slice(0, 6).toUpperCase()}`).toUpperCase();
+  const coupon: Coupon = {
+    type: "percentage",
+    value: 10,
+    description: "Test coupon",
+    minOrderAmount: 0,
+    maxUses: null,
+    usedCount: 0,
+    isActive: true,
+    expiresAt: null,
+    createdAt: new Date(),
+    ...overrides,
+    id,
+    code,
+  };
+
+  couponsStore.set(coupon.id, coupon);
+  couponCodeIndex.set(coupon.code, coupon.id);
+  return coupon;
 }
