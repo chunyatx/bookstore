@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { NgIf } from '@angular/common';
+import { DecimalPipe, NgIf } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
 import { CartService } from '../../services/cart.service';
 import { AccountService } from '../../services/account.service';
@@ -8,7 +8,7 @@ import { AccountService } from '../../services/account.service';
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [RouterLink, NgIf],
+  imports: [RouterLink, NgIf, DecimalPipe],
   styles: [`
     nav {
       position: fixed;

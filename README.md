@@ -12,7 +12,7 @@ A full-stack bookstore application with a **Java Spring Boot** REST API backend 
 - **Shopping cart** — add, update quantity, remove items; price snapshots prevent stale-price bugs
 - **Order management** — place orders (decrements stock), list history, cancel pending orders (restores stock)
 - **Swagger UI** — interactive API docs at `/docs`
-- **Amazon-style frontend** — vanilla HTML/CSS/JS served directly by Express
+- **Angular frontend** — reactive SPA with book grid, cart panel, auth modal, order history, and admin dashboard
 
 ---
 
@@ -213,10 +213,10 @@ All order endpoints require a Bearer token.
 
 ## Design Notes
 
-- **In-memory storage** — all data lives in Node.js `Map` objects and is reset on server restart. Swap out `src/store/index.ts` for a database adapter to make it persistent.
+- **In-memory storage** — all data lives in Java `ConcurrentHashMap`s in `InMemoryStore` and resets on server restart. Replace with JPA + a database to make it persistent.
 - **Price snapshots** — `priceAtAdd` and `priceAtOrder` capture the price at the time of the action, so changing a book's price never affects existing carts or order history.
-- **Stock atomicity** — `placeOrder` validates all items before mutating any stock. Because Node.js is single-threaded and no `await` exists between the check and the mutate, this is race-condition-free for in-memory storage.
-- **Admin role** — the seed creates one admin on startup. To promote an existing user you would update their `role` directly in `usersStore` (or add an admin-only `PATCH /api/users/:id` endpoint).
+- **Stock atomicity** — `placeOrder` validates all items before mutating any stock inside a `synchronized(store)` block, preventing race conditions in concurrent requests.
+- **Admin role** — `DataSeeder` creates one admin on startup. To promote an existing user, add an admin-only endpoint or adjust the seeder.
 
 ---
 
