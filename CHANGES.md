@@ -2,16 +2,17 @@
 
 ## Java Spring Boot + Angular Conversion & Fixes
 
-### Backend: Java Spring Boot Migration
+### Backend: Java Spring Boot Migration *(2026-03-02)*
 
 **Converted** the original Node.js/Express application to a Java 21 + Spring Boot 3.2.5 backend
 and an Angular 17 standalone-component frontend, preserving all existing API contracts.
 
 ---
 
-### Bug Fixes
+### Bug Fixes *(2026-03-03)*
 
 #### `OrderService.cancelOrder()` — NullPointerException guard
+- **Date:** 2026-03-03
 - **File:** `backend/src/main/java/com/bookstore/service/OrderService.java`
 - **Problem:** If the order ID did not exist, `store.orders.get(id)` returned `null` and the
   method immediately threw an unhandled NPE instead of a proper 404.
@@ -20,18 +21,21 @@ and an Angular 17 standalone-component frontend, preserving all existing API con
   the wallet refund.
 
 #### `AdminService.refundOrder()` — NullPointerException guard
+- **Date:** 2026-03-03
 - **File:** `backend/src/main/java/com/bookstore/service/AdminService.java`
 - **Problem:** Same pattern as above — no null-check on the fetched order, causing an NPE
   when an invalid order ID was passed.
 - **Fix:** Added null-check throwing `ResponseStatusException(NOT_FOUND)`.
 
 #### `BookService.listBooks()` — Negative `Stream.skip()` on page 0 or negative page
+- **Date:** 2026-03-03
 - **File:** `backend/src/main/java/com/bookstore/service/BookService.java`
 - **Problem:** The skip value was computed as `(page - 1) * limit`. When `page` was 0 or
   negative the skip became negative, causing an `IllegalArgumentException` from the Stream API.
 - **Fix:** Clamped `page` to a minimum of `1` before computing the skip offset.
 
 #### `AdminService.createCoupon()` — `DateTimeParseException` leaked as HTTP 500
+- **Date:** 2026-03-03
 - **File:** `backend/src/main/java/com/bookstore/service/AdminService.java`
 - **Problem:** `Instant.parse(expiresAt)` only accepts ISO-8601 with a `Z` suffix. Sending a
   datetime-local string (e.g. `2025-12-31T23:59`) from the Angular form threw an unhandled
@@ -41,6 +45,7 @@ and an Angular 17 standalone-component frontend, preserving all existing API con
   formats now return HTTP 400 with a descriptive message.
 
 #### `CartService.applyCoupon()` — `IllegalArgumentException` not wrapped in HTTP 400
+- **Date:** 2026-03-03
 - **File:** `backend/src/main/java/com/bookstore/service/CartService.java`
 - **Problem:** `CouponHelper.validateCoupon()` throws `IllegalArgumentException` for invalid
   or below-minimum-order coupons. `applyCoupon()` did not catch this, so the raw exception
@@ -49,6 +54,7 @@ and an Angular 17 standalone-component frontend, preserving all existing API con
   `ResponseStatusException(BAD_REQUEST, e.getMessage())`.
 
 #### `CartService.enrichCart()` — Expired coupon cleared from cart but not from response
+- **Date:** 2026-03-03
 - **File:** `backend/src/main/java/com/bookstore/service/CartService.java`
 - **Problem:** `resp.setCouponCode(cart.getCouponCode())` was called at the top of
   `enrichCart()`, before the coupon-validation block. When an expired/invalid coupon was
@@ -59,7 +65,7 @@ and an Angular 17 standalone-component frontend, preserving all existing API con
 
 ---
 
-### Tests Added
+### Tests Added *(2026-03-03)*
 
 #### Unit Tests (`backend/src/test/java/com/bookstore/service/`)
 
@@ -95,7 +101,7 @@ unique emails and ISBNs per test.
 
 ---
 
-### Frontend: Angular Template Literal Fix
+### Frontend: Angular Template Literal Fix *(2026-03-03)*
 
 - **Files:** `shop.component.ts`, `cart-panel.component.ts`, `orders.component.ts`,
   `navbar.component.ts`, `admin-customers.component.ts`, `admin-orders.component.ts`,
@@ -112,16 +118,17 @@ unique emails and ISBNs per test.
 
 ### Miscellaneous
 
-#### `.gitignore` — Added build output directories
+#### `.gitignore` — Added build output directories *(2026-03-03)*
 - Added `backend/target/`, `frontend/dist/`, `frontend/node_modules/`, and
   `frontend/.angular/` to prevent Maven, Angular build, and Angular CLI cache artifacts
   from appearing as untracked files.
 
 ---
 
-### Frontend: Login & Balance Fixes
+### Frontend: Login & Balance Fixes *(2026-03-03)*
 
 #### Login — Balance not refreshed on sign-in
+- **Date:** 2026-03-03
 - **Files:** `navbar.component.ts`, `account.service.ts`
 - **Problem:** After a successful login the navbar balance stayed at `$0.00` until the user
   manually clicked "Refresh Balance", because `loadBalance()` was never called on auth state
@@ -131,6 +138,7 @@ unique emails and ISBNs per test.
   reset to `0` immediately.
 
 #### Login — Current page not checked for accessibility after sign-in
+- **Date:** 2026-03-03
 - **Files:** `auth-modal.component.ts`
 - **Problem:** Angular route guards only run on navigation, not when authentication state
   changes in place. If a user was on `/admin`, logged out (staying on the page), then logged
@@ -139,6 +147,7 @@ unique emails and ISBNs per test.
   path starts with `/admin` and the newly logged-in user is not an admin, it navigates to `/`.
 
 #### Cancel Order — Balance not refreshed in navbar
+- **Date:** 2026-03-03
 - **Files:** `orders.component.ts`, `account.service.ts`
 - **Problem:** Cancelling an order refunds the wallet on the backend, but the navbar balance
   was not updated — it only changed after a manual "Refresh Balance" click.
