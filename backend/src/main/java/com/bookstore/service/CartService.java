@@ -100,8 +100,11 @@ public class CartService {
     public EnrichedCartResponse applyCoupon(String userId, ApplyCouponRequest req) {
         Cart cart = store.carts.computeIfAbsent(userId, Cart::new);
         double subtotal = computeSubtotal(cart);
-        // Validate throws if invalid
-        couponHelper.validateCoupon(req.getCode(), subtotal);
+        try {
+            couponHelper.validateCoupon(req.getCode(), subtotal);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
         cart.setCouponCode(req.getCode());
         cart.setUpdatedAt(Instant.now());
         return enrichCart(cart);
@@ -151,6 +154,7 @@ public class CartService {
             } else {
                 // Coupon became invalid (expired, maxed out) — silently clear
                 cart.setCouponCode(null);
+                resp.setCouponCode(null);
             }
         }
 

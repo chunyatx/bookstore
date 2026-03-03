@@ -191,6 +191,10 @@ public class OrderService {
 
             // Refund wallet
             Account account = store.accounts.get(order.getUserId());
+            if (account == null) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Account not found for user: " + order.getUserId());
+            }
             double refundAmount = order.getTotalAmount();
             double newBalance = Math.round((account.getBalance() + refundAmount) * 100.0) / 100.0;
             account.setBalance(newBalance);

@@ -49,8 +49,9 @@ public class BookService {
         List<Book> all = stream.sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
                                .toList();
         long total = all.size();
-        int clampedLimit = Math.min(limit, 100);
-        int skip = (page - 1) * clampedLimit;
+        int clampedLimit = Math.min(Math.max(limit, 1), 100);
+        int safePage = Math.max(page, 1);
+        int skip = (safePage - 1) * clampedLimit;
 
         List<Book> paged = all.stream().skip(skip).limit(clampedLimit).toList();
         return new PagedBooksResponse(paged, total, page, clampedLimit);

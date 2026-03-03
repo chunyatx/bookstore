@@ -163,6 +163,10 @@ public class AdminService {
 
             Instant now = Instant.now();
             Account account = store.accounts.get(order.getUserId());
+            if (account == null) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Account not found for user: " + order.getUserId());
+            }
             double refund = order.getTotalAmount();
             double newBalance = Math.round((account.getBalance() + refund) * 100.0) / 100.0;
             account.setBalance(newBalance);
@@ -213,7 +217,12 @@ public class AdminService {
         coupon.setMaxUses(req.getMaxUses());
         coupon.setUsedCount(0);
         coupon.setActive(true);
-        coupon.setExpiresAt(req.getExpiresAt() != null ? Instant.parse(req.getExpiresAt()) : null);
+        try {
+            coupon.setExpiresAt(req.getExpiresAt() != null ? Instant.parse(req.getExpiresAt()) : null);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid expiresAt format — use ISO-8601 (e.g. 2026-12-31T23:59:59Z)");
+        }
         coupon.setCreatedAt(Instant.now());
 
         store.coupons.put(coupon.getId(), coupon);
