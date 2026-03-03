@@ -2,3 +2,9 @@ node_modules/
 dist/
 .env
 *.js.map
+
+# Maven build output
+backend/target/
+frontend/dist/
+frontend/node_modules/
+frontend/.angular/

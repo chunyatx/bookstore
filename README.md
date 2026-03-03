@@ -1,6 +1,6 @@
-# 📚 BookStore API
+# 📚 Bookstore — Java Spring Boot + Angular
 
-A full-stack book store application built with **TypeScript** and **Express 5** — featuring a REST API backend, an Amazon-style browser frontend, and interactive Swagger docs.
+A full-stack bookstore application with a **Java Spring Boot** REST API backend and **Angular 17** frontend.
 
 ---
 
@@ -12,7 +12,7 @@ A full-stack book store application built with **TypeScript** and **Express 5** 
 - **Shopping cart** — add, update quantity, remove items; price snapshots prevent stale-price bugs
 - **Order management** — place orders (decrements stock), list history, cancel pending orders (restores stock)
 - **Swagger UI** — interactive API docs at `/docs`
-- **Amazon-style frontend** — vanilla HTML/CSS/JS served directly by Express
+- **Angular frontend** — reactive SPA with book grid, cart panel, auth modal, order history, and admin dashboard
 
 ---
 
@@ -20,14 +20,12 @@ A full-stack book store application built with **TypeScript** and **Express 5** 
 
 | Layer | Technology |
 |-------|-----------|
-| Runtime | Node.js 18+ |
-| Language | TypeScript 5 (strict mode) |
-| Framework | Express 5 |
-| Auth | JSON Web Tokens (`jsonwebtoken`) + `bcryptjs` |
-| Validation | Zod 4 |
-| Storage | In-memory Maps (no database required) |
-| API Docs | swagger-ui-express |
-| Dev server | ts-node-dev |
+| Backend | Java 21, Spring Boot 3.2, Spring Security |
+| Frontend | Angular 17 (standalone components, signals) |
+| Auth | JWT (Bearer token), BCrypt password hashing |
+| Validation | Jakarta Bean Validation |
+| Storage | In-memory `ConcurrentHashMap` (no database required) |
+| API Docs | SpringDoc / Swagger UI at `/docs` |
 
 ---
 
@@ -35,88 +33,58 @@ A full-stack book store application built with **TypeScript** and **Express 5** 
 
 ### Prerequisites
 
-- Node.js 18 or higher
-- npm 9 or higher
+- Java 21+
+- Maven 3.9+
+- Node.js 18+ and npm (for the frontend)
+- Angular CLI 17: `npm install -g @angular/cli@17`
 
-### Installation
+### Run the Backend
 
 ```bash
-git clone https://github.com/chunyatx/bookstore.git
-cd bookstore
+cd backend
+mvn spring-boot:run
+```
+
+- API base: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/docs`
+- Health check: `http://localhost:8080/health`
+
+### Run the Frontend
+
+```bash
+cd frontend
 npm install
+ng serve
 ```
 
-### Environment Variables
-
-Copy the example env file and set your JWT secret:
-
-```bash
-cp .env.example .env
-```
-
-`.env` options:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | Port the server listens on |
-| `JWT_SECRET` | `change-me-in-production` | Secret used to sign JWT tokens — **change this in production** |
-
----
-
-## Developer Menu
-
-### Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server with hot-reload (`ts-node-dev`) |
-| `npm run build` | Compile TypeScript to `dist/` |
-| `npm start` | Run the compiled production build |
-
-### Development workflow
-
-```bash
-# Start hot-reloading dev server
-npm run dev
-
-# Build for production
-npm run build
-
-# Run production build
-npm start
-```
+- App: `http://localhost:4200`
+- All `/api` requests are proxied to `http://localhost:8080`
 
 ### Project Structure
 
 ```
 bookstore/
-├── public/
-│   └── index.html              # Amazon-style frontend (single file, no build step)
-├── src/
-│   ├── index.ts                # Entry point — loads env, seeds data, starts server
-│   ├── app.ts                  # Express app setup and route wiring
-│   ├── seed.ts                 # Startup seed: admin user + 15 sample books
-│   ├── swagger.ts              # OpenAPI 3.0 spec object
-│   ├── types/
-│   │   └── index.ts            # TypeScript interfaces + Zod validation schemas
-│   ├── store/
-│   │   └── index.ts            # In-memory singleton Maps (the "database")
-│   ├── middleware/
-│   │   └── auth.ts             # JWT authenticate + requireRole middleware
-│   ├── routes/
-│   │   ├── auth.routes.ts
-│   │   ├── books.routes.ts
-│   │   ├── cart.routes.ts
-│   │   └── orders.routes.ts
-│   └── controllers/
-│       ├── auth.controller.ts
-│       ├── books.controller.ts
-│       ├── cart.controller.ts
-│       └── orders.controller.ts
-├── .env.example
-├── .gitignore
-├── package.json
-└── tsconfig.json
+├── backend/                    # Spring Boot Maven project
+│   ├── pom.xml
+│   └── src/main/java/com/bookstore/
+│       ├── config/             # SecurityConfig, CorsConfig, OpenApiConfig
+│       ├── model/              # Domain POJOs (User, Book, Cart, Order, Coupon, ...)
+│       ├── store/              # InMemoryStore (ConcurrentHashMaps)
+│       ├── security/           # JwtUtil, JwtAuthFilter, BookstorePrincipal
+│       ├── dto/                # Request/response DTOs
+│       ├── service/            # Business logic
+│       ├── controller/         # REST controllers
+│       ├── exception/          # GlobalExceptionHandler
+│       └── seed/               # DataSeeder (ApplicationRunner)
+├── frontend/                   # Angular 17 project
+│   ├── angular.json
+│   └── src/app/
+│       ├── models/             # TypeScript interfaces
+│       ├── services/           # HTTP services (auth, books, cart, orders, admin, account)
+│       ├── interceptors/       # Auth JWT interceptor
+│       ├── guards/             # authGuard, adminGuard
+│       └── components/         # navbar, auth, shop, cart, orders, admin
+└── plan/                       # Architecture docs
 ```
 
 ---
@@ -245,10 +213,10 @@ All order endpoints require a Bearer token.
 
 ## Design Notes
 
-- **In-memory storage** — all data lives in Node.js `Map` objects and is reset on server restart. Swap out `src/store/index.ts` for a database adapter to make it persistent.
+- **In-memory storage** — all data lives in Java `ConcurrentHashMap`s in `InMemoryStore` and resets on server restart. Replace with JPA + a database to make it persistent.
 - **Price snapshots** — `priceAtAdd` and `priceAtOrder` capture the price at the time of the action, so changing a book's price never affects existing carts or order history.
-- **Stock atomicity** — `placeOrder` validates all items before mutating any stock. Because Node.js is single-threaded and no `await` exists between the check and the mutate, this is race-condition-free for in-memory storage.
-- **Admin role** — the seed creates one admin on startup. To promote an existing user you would update their `role` directly in `usersStore` (or add an admin-only `PATCH /api/users/:id` endpoint).
+- **Stock atomicity** — `placeOrder` validates all items before mutating any stock inside a `synchronized(store)` block, preventing race conditions in concurrent requests.
+- **Admin role** — `DataSeeder` creates one admin on startup. To promote an existing user, add an admin-only endpoint or adjust the seeder.
 
 ---
 
