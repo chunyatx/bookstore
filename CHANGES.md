@@ -113,5 +113,35 @@ unique emails and ISBNs per test.
 ### Miscellaneous
 
 #### `.gitignore` — Added build output directories
-- Added `backend/target/`, `frontend/dist/`, and `frontend/node_modules/` to prevent Maven
-  and Angular build artifacts from appearing as untracked files.
+- Added `backend/target/`, `frontend/dist/`, `frontend/node_modules/`, and
+  `frontend/.angular/` to prevent Maven, Angular build, and Angular CLI cache artifacts
+  from appearing as untracked files.
+
+---
+
+### Frontend: Login & Balance Fixes
+
+#### Login — Balance not refreshed on sign-in
+- **Files:** `navbar.component.ts`, `account.service.ts`
+- **Problem:** After a successful login the navbar balance stayed at `$0.00` until the user
+  manually clicked "Refresh Balance", because `loadBalance()` was never called on auth state
+  change.
+- **Fix:** Added an `effect()` in `NavbarComponent` that watches `auth.isLoggedIn()`; when it
+  becomes `true` the balance is fetched automatically. When the user logs out the balance is
+  reset to `0` immediately.
+
+#### Login — Current page not checked for accessibility after sign-in
+- **Files:** `auth-modal.component.ts`
+- **Problem:** Angular route guards only run on navigation, not when authentication state
+  changes in place. If a user was on `/admin`, logged out (staying on the page), then logged
+  back in as a regular customer, the admin page remained visible with no redirect.
+- **Fix:** After a successful login, `AuthModalComponent` checks `router.url`; if the current
+  path starts with `/admin` and the newly logged-in user is not an admin, it navigates to `/`.
+
+#### Cancel Order — Balance not refreshed in navbar
+- **Files:** `orders.component.ts`, `account.service.ts`
+- **Problem:** Cancelling an order refunds the wallet on the backend, but the navbar balance
+  was not updated — it only changed after a manual "Refresh Balance" click.
+- **Fix:** Added a `triggerRefresh()` method (backed by an RxJS `Subject`) to `AccountService`.
+  `OrdersComponent` calls it after a successful cancel; `NavbarComponent` subscribes to the
+  observable and calls `loadBalance()` whenever a refresh is requested.

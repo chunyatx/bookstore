@@ -3,6 +3,7 @@ import { NgFor, NgIf, NgClass, DecimalPipe, DatePipe } from '@angular/common';
 import { Order } from '../../models';
 import { OrderService } from '../../services/order.service';
 import { ToastService } from '../../services/toast.service';
+import { AccountService } from '../../services/account.service';
 
 @Component({
   selector: 'app-orders',
@@ -77,7 +78,8 @@ export class OrdersComponent implements OnInit {
 
   constructor(
     private orderService: OrderService,
-    private toast: ToastService
+    private toast: ToastService,
+    private accountService: AccountService
   ) {}
 
   ngOnInit(): void {
@@ -101,6 +103,7 @@ export class OrdersComponent implements OnInit {
       next: () => {
         this.toast.show('Order cancelled. Wallet refunded.', 'success');
         this.loadOrders();
+        this.accountService.triggerRefresh();
       },
       error: (err) => this.toast.show(err.error?.error ?? 'Cancel failed', 'error')
     });

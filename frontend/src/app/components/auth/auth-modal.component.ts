@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgIf } from '@angular/common';
+import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { CartService } from '../../services/cart.service';
 import { ToastService } from '../../services/toast.service';
@@ -70,7 +71,8 @@ export class AuthModalComponent {
   constructor(
     private auth: AuthService,
     private cart: CartService,
-    private toast: ToastService
+    private toast: ToastService,
+    private router: Router
   ) {}
 
   onOverlayClick(e: MouseEvent): void {
@@ -89,6 +91,10 @@ export class AuthModalComponent {
           this.cart.loadCart().subscribe();
           this.toast.show('Welcome back!', 'success');
           this.close.emit();
+          const user = this.auth.currentUser();
+          if (this.router.url.startsWith('/admin') && user?.role !== 'admin') {
+            this.router.navigate(['/']);
+          }
         },
         error: (err) => {
           this.error.set(err.error?.error ?? 'Login failed');

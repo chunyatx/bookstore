@@ -1,4 +1,5 @@
-import { Component, EventEmitter, Output, signal } from '@angular/core';
+import { Component, EventEmitter, OnDestroy, Output, effect, signal } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { RouterLink } from '@angular/router';
 import { DecimalPipe, NgIf } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
@@ -120,18 +121,33 @@ import { AccountService } from '../../services/account.service';
     </nav>
   `
 })
-export class NavbarComponent {
+export class NavbarComponent implements OnDestroy {
   @Output() openCart = new EventEmitter<void>();
   @Output() openAuth = new EventEmitter<void>();
 
   menuOpen = signal(false);
   balance = signal(0);
 
+  private sub: Subscription;
+
   constructor(
     public auth: AuthService,
     public cart: CartService,
     private accountService: AccountService
-  ) {}
+  ) {
+    effect(() => {
+      if (this.auth.isLoggedIn()) {
+        this.loadBalance();
+      } else {
+        this.balance.set(0);
+      }
+    });
+    this.sub = this.accountService.balanceRefresh$.subscribe(() => this.loadBalance());
+  }
+
+  ngOnDestroy(): void {
+    this.sub.unsubscribe();
+  }
 
   doLogout(): void {
     this.auth.logout();
