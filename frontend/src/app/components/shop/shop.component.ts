@@ -118,7 +118,7 @@ const GENRES = ['All', 'Fiction', 'Science Fiction', 'Fantasy', 'Mystery', 'Lite
             <div class="book-desc">{{ book.description }}</div>
             <div class="book-footer">
               <div>
-                <div class="book-price">${{ book.price | number:'1.2-2' }}</div>
+                <div class="book-price">\${{ book.price | number:'1.2-2' }}</div>
                 <div class="book-stock" *ngIf="book.stock > 0; else oosLabel">{{ book.stock }} in stock</div>
                 <ng-template #oosLabel><div class="book-stock" style="color:#dc2626;">Out of stock</div></ng-template>
               </div>

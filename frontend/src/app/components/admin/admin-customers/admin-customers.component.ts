@@ -38,7 +38,7 @@ import { ToastService } from '../../../services/toast.service';
           <tr *ngFor="let c of customers()">
             <td>{{ c.name }}</td>
             <td>{{ c.email }}</td>
-            <td>${{ c.balance | number:'1.2-2' }}</td>
+            <td>\${{ c.balance | number:'1.2-2' }}</td>
             <td>{{ c.orderCount }}</td>
             <td>
               <button class="btn btn-sm btn-secondary" (click)="viewDetail(c.id)">Details</button>
@@ -52,14 +52,14 @@ import { ToastService } from '../../../services/toast.service';
       <!-- Detail panel -->
       <div class="detail-panel" *ngIf="selectedCustomer()">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <strong>{{ selectedCustomer()?.name }} — ${{ selectedCustomer()?.balance | number:'1.2-2' }}</strong>
+          <strong>{{ selectedCustomer()?.name }} — \${{ selectedCustomer()?.balance | number:'1.2-2' }}</strong>
           <button style="background:none;border:none;cursor:pointer;font-size:18px;" (click)="selectedCustomer.set(null)">×</button>
         </div>
         <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">Recent Transactions</div>
         <div *ngFor="let tx of selectedCustomer()?.transactions?.slice(0,5)"
              style="font-size:13px;padding:6px 0;border-bottom:1px solid #e5e7eb;">
           <span [style.color]="tx.type === 'credit' || tx.type === 'refund' ? '#16a34a' : '#dc2626'">
-            {{ tx.type === 'credit' || tx.type === 'refund' ? '+' : '−' }}${{ tx.amount | number:'1.2-2' }}
+            {{ tx.type === 'credit' || tx.type === 'refund' ? '+' : '−' }}\${{ tx.amount | number:'1.2-2' }}
           </span>
           — {{ tx.description }}
           <span style="color:#9ca3af;"> ({{ tx.createdAt | date:'short' }})</span>

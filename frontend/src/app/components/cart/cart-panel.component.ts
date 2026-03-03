@@ -79,7 +79,7 @@ import { ToastService } from '../../services/toast.service';
             <div class="item" *ngFor="let item of c.items">
               <div class="item-info">
                 <div class="item-title">{{ item.title }}</div>
-                <div class="item-price">${{ item.priceAtAdd | number:'1.2-2' }} each</div>
+                <div class="item-price">\${{ item.priceAtAdd | number:'1.2-2' }} each</div>
                 <div class="qty-control">
                   <button class="qty-btn" (click)="changeQty(item.bookId, item.quantity - 1)">−</button>
                   <span>{{ item.quantity }}</span>
@@ -87,7 +87,7 @@ import { ToastService } from '../../services/toast.service';
                 </div>
               </div>
               <div style="font-weight:600;">
-                ${{ (item.priceAtAdd * item.quantity) | number:'1.2-2' }}
+                \${{ (item.priceAtAdd * item.quantity) | number:'1.2-2' }}
               </div>
             </div>
           </ng-container>
@@ -112,12 +112,12 @@ import { ToastService } from '../../services/toast.service';
 
         <!-- Totals -->
         <div class="totals">
-          <div><span>Subtotal</span><span>${{ cart.cart()?.subtotal | number:'1.2-2' }}</span></div>
+          <div><span>Subtotal</span><span>\${{ cart.cart()?.subtotal | number:'1.2-2' }}</span></div>
           <div *ngIf="cart.cart()?.discountAmount" style="color:#16a34a;">
             <span>Discount ({{ cart.cart()?.couponCode }})</span>
-            <span>−${{ cart.cart()?.discountAmount | number:'1.2-2' }}</span>
+            <span>−\${{ cart.cart()?.discountAmount | number:'1.2-2' }}</span>
           </div>
-          <div class="total"><span>Total</span><span>${{ cart.cart()?.finalTotal | number:'1.2-2' }}</span></div>
+          <div class="total"><span>Total</span><span>\${{ cart.cart()?.finalTotal | number:'1.2-2' }}</span></div>
         </div>
 
         <button class="btn btn-primary" style="width:100%;" [disabled]="checkoutLoading()" (click)="checkout()">

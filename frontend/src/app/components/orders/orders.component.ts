@@ -49,17 +49,17 @@ import { ToastService } from '../../services/toast.service';
         <div class="items-list">
           <div class="order-item" *ngFor="let item of order.items">
             <span>{{ item.title }} × {{ item.quantity }}</span>
-            <span>${{ (item.priceAtOrder * item.quantity) | number:'1.2-2' }}</span>
+            <span>\${{ (item.priceAtOrder * item.quantity) | number:'1.2-2' }}</span>
           </div>
         </div>
 
         <div class="order-footer">
           <div class="totals">
-            <div>Subtotal: ${{ order.subtotal | number:'1.2-2' }}</div>
+            <div>Subtotal: \${{ order.subtotal | number:'1.2-2' }}</div>
             <div *ngIf="order.discountAmount > 0" style="color:#16a34a;">
-              Discount ({{ order.couponCode }}): −${{ order.discountAmount | number:'1.2-2' }}
+              Discount ({{ order.couponCode }}): −\${{ order.discountAmount | number:'1.2-2' }}
             </div>
-            <div class="total">Total: ${{ order.totalAmount | number:'1.2-2' }}</div>
+            <div class="total">Total: \${{ order.totalAmount | number:'1.2-2' }}</div>
           </div>
           <button *ngIf="order.status === 'pending'"
                   class="btn btn-sm btn-danger"

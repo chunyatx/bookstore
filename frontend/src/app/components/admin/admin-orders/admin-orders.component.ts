@@ -40,7 +40,7 @@ const STATUS_NEXT: Record<string, string> = { pending: 'confirmed', confirmed: '
             <td>#{{ o.id.slice(0,8) }}</td>
             <td>{{ o.createdAt | date:'short' }}</td>
             <td>{{ o.userId.slice(0,8) }}</td>
-            <td>${{ o.totalAmount | number:'1.2-2' }}</td>
+            <td>\${{ o.totalAmount | number:'1.2-2' }}</td>
             <td><span class="badge" [ngClass]="'badge-' + o.status">{{ o.status }}</span></td>
             <td>
               <div class="actions">

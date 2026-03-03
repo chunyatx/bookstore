@@ -108,7 +108,7 @@ import { AccountService } from '../../services/account.service';
           {{ auth.currentUser()?.name }} ▾
         </button>
         <div class="dropdown" *ngIf="menuOpen()">
-          <div class="balance-info">Balance: ${{ balance() | number:'1.2-2' }}</div>
+          <div class="balance-info">Balance: \${{ balance() | number:'1.2-2' }}</div>
           <button class="dropdown-item" (click)="loadBalance()">🔄 Refresh Balance</button>
           <hr class="dropdown-sep">
           <button class="dropdown-item" (click)="doLogout()">🚪 Logout</button>

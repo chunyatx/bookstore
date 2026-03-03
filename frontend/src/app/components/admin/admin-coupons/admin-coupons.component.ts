@@ -36,7 +36,7 @@ import { ToastService } from '../../../services/toast.service';
             <td>{{ c.type }}</td>
             <td>{{ c.type === 'percentage' ? c.value + '%' : ('$' + (c.value | number:'1.2-2')) }}</td>
             <td>{{ c.usedCount }} / {{ c.maxUses ?? '∞' }}</td>
-            <td>${{ c.minOrderAmount | number:'1.2-2' }}</td>
+            <td>\${{ c.minOrderAmount | number:'1.2-2' }}</td>
             <td>
               <span [style.color]="c.active ? '#16a34a' : '#dc2626'" [style.fontWeight]="600">
                 {{ c.active ? 'Active' : 'Inactive' }}
