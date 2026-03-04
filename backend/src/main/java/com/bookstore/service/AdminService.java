@@ -217,6 +217,7 @@ public class AdminService {
         coupon.setMaxUses(req.getMaxUses());
         coupon.setUsedCount(0);
         coupon.setActive(true);
+        coupon.setNewUserOnlyDays(req.getNewUserOnlyDays());
         try {
             coupon.setExpiresAt(req.getExpiresAt() != null ? Instant.parse(req.getExpiresAt()) : null);
         } catch (java.time.format.DateTimeParseException e) {

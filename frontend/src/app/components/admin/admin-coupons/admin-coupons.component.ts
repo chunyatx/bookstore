@@ -28,7 +28,7 @@ import { ToastService } from '../../../services/toast.service';
 
       <table>
         <thead>
-          <tr><th>Code</th><th>Type</th><th>Value</th><th>Used/Max</th><th>Min Order</th><th>Status</th><th>Actions</th></tr>
+          <tr><th>Code</th><th>Type</th><th>Value</th><th>Used/Max</th><th>Min Order</th><th>New Users Only</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
           <tr *ngFor="let c of coupons()">
@@ -37,6 +37,7 @@ import { ToastService } from '../../../services/toast.service';
             <td>{{ c.type === 'percentage' ? c.value + '%' : ('$' + (c.value | number:'1.2-2')) }}</td>
             <td>{{ c.usedCount }} / {{ c.maxUses ?? '∞' }}</td>
             <td>\${{ c.minOrderAmount | number:'1.2-2' }}</td>
+            <td>{{ c.newUserOnlyDays != null ? 'Within ' + c.newUserOnlyDays + ' days' : '—' }}</td>
             <td>
               <span [style.color]="c.active ? '#16a34a' : '#dc2626'" [style.fontWeight]="600">
                 {{ c.active ? 'Active' : 'Inactive' }}
@@ -89,6 +90,10 @@ import { ToastService } from '../../../services/toast.service';
             <label>Expires At (optional)</label>
             <input type="datetime-local" [(ngModel)]="newExpiresAt" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
           </div>
+          <div class="form-group" style="margin-top:10px;">
+            <label>New Users Only — Days from Registration (blank=all users)</label>
+            <input type="number" [(ngModel)]="newUserOnlyDays" min="1" placeholder="e.g. 30" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
+          </div>
           <div style="display:flex;gap:8px;margin-top:16px;">
             <button class="btn btn-secondary" (click)="createModal.set(false)">Cancel</button>
             <button class="btn btn-primary" (click)="submitCreate()">Create</button>
@@ -109,6 +114,7 @@ export class AdminCouponsComponent implements OnInit {
   newMinOrder = 0;
   newMaxUses: number | null = null;
   newExpiresAt = '';
+  newUserOnlyDays: number | null = null;
 
   constructor(private adminService: AdminService, private toast: ToastService) {}
 
@@ -137,7 +143,8 @@ export class AdminCouponsComponent implements OnInit {
       description: this.newDescription.trim(),
       minOrderAmount: this.newMinOrder || 0,
       maxUses: this.newMaxUses || null,
-      expiresAt: this.newExpiresAt ? new Date(this.newExpiresAt).toISOString() : null
+      expiresAt: this.newExpiresAt ? new Date(this.newExpiresAt).toISOString() : null,
+      newUserOnlyDays: this.newUserOnlyDays || null
     };
     if (!body.code || !body.description || !body.value) {
       this.toast.show('Please fill required fields', 'error');

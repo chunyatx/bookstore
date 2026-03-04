@@ -104,6 +104,7 @@ export interface Coupon {
   active: boolean;
   expiresAt: string | null;
   createdAt: string;
+  newUserOnlyDays: number | null;
 }
 
 export interface CustomerSummary {

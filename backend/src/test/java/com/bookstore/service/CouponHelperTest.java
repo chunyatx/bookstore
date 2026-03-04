@@ -26,13 +26,13 @@ class CouponHelperTest {
     @Test
     void validate_validPercentageCoupon_returnsIt() {
         TestFixtures.addCoupon(store, "SAVE10", CouponType.percentage, 10, 0);
-        Coupon result = helper.validateCoupon("SAVE10", 50.0);
+        Coupon result = helper.validateCoupon("SAVE10", 50.0, null);
         assertThat(result.getCode()).isEqualTo("SAVE10");
     }
 
     @Test
     void validate_codeNotFound_throws() {
-        assertThatThrownBy(() -> helper.validateCoupon("GHOST", 50.0))
+        assertThatThrownBy(() -> helper.validateCoupon("GHOST", 50.0, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not found");
     }
@@ -41,7 +41,7 @@ class CouponHelperTest {
     void validate_inactiveCoupon_throws() {
         Coupon c = TestFixtures.addCoupon(store, "OFF", CouponType.fixed, 5, 0);
         c.setActive(false);
-        assertThatThrownBy(() -> helper.validateCoupon("OFF", 50.0))
+        assertThatThrownBy(() -> helper.validateCoupon("OFF", 50.0, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not active");
     }
@@ -50,7 +50,7 @@ class CouponHelperTest {
     void validate_expiredCoupon_throws() {
         Coupon c = TestFixtures.addCoupon(store, "OLD", CouponType.percentage, 10, 0);
         c.setExpiresAt(Instant.now().minusSeconds(3600));
-        assertThatThrownBy(() -> helper.validateCoupon("OLD", 50.0))
+        assertThatThrownBy(() -> helper.validateCoupon("OLD", 50.0, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("expired");
     }
@@ -60,7 +60,7 @@ class CouponHelperTest {
         Coupon c = TestFixtures.addCoupon(store, "LIMITED", CouponType.percentage, 10, 0);
         c.setMaxUses(5);
         c.setUsedCount(5);
-        assertThatThrownBy(() -> helper.validateCoupon("LIMITED", 50.0))
+        assertThatThrownBy(() -> helper.validateCoupon("LIMITED", 50.0, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("usage limit");
     }
@@ -68,7 +68,7 @@ class CouponHelperTest {
     @Test
     void validate_belowMinOrderAmount_throws() {
         TestFixtures.addCoupon(store, "BIG", CouponType.fixed, 5, 100.0);
-        assertThatThrownBy(() -> helper.validateCoupon("BIG", 30.0))
+        assertThatThrownBy(() -> helper.validateCoupon("BIG", 30.0, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Minimum order amount");
     }
@@ -76,27 +76,78 @@ class CouponHelperTest {
     @Test
     void validate_caseInsensitiveCode() {
         TestFixtures.addCoupon(store, "UPPER", CouponType.percentage, 10, 0);
-        assertThatCode(() -> helper.validateCoupon("upper", 50.0)).doesNotThrowAnyException();
+        assertThatCode(() -> helper.validateCoupon("upper", 50.0, null)).doesNotThrowAnyException();
     }
 
     @Test
     void validate_notYetExpired_succeeds() {
         Coupon c = TestFixtures.addCoupon(store, "FUTURE", CouponType.percentage, 10, 0);
         c.setExpiresAt(Instant.now().plusSeconds(3600));
-        assertThatCode(() -> helper.validateCoupon("FUTURE", 50.0)).doesNotThrowAnyException();
+        assertThatCode(() -> helper.validateCoupon("FUTURE", 50.0, null)).doesNotThrowAnyException();
+    }
+
+    // ── newUserOnlyDays criteria ───────────────────────────────────────────────
+
+    @Test
+    void validate_newUserOnlyDays_userRegisteredRecently_succeeds() {
+        Coupon c = TestFixtures.addCoupon(store, "NEWBIE30", CouponType.percentage, 10, 0);
+        c.setNewUserOnlyDays(30);
+        // User registered 10 days ago — within the 30-day window
+        Instant registeredAt = Instant.now().minus(10, java.time.temporal.ChronoUnit.DAYS);
+        assertThatCode(() -> helper.validateCoupon("NEWBIE30", 50.0, registeredAt))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void validate_newUserOnlyDays_userRegisteredTooLongAgo_throws() {
+        Coupon c = TestFixtures.addCoupon(store, "NEWBIE30", CouponType.percentage, 10, 0);
+        c.setNewUserOnlyDays(30);
+        // User registered 31 days ago — outside the 30-day window
+        Instant registeredAt = Instant.now().minus(31, java.time.temporal.ChronoUnit.DAYS);
+        assertThatThrownBy(() -> helper.validateCoupon("NEWBIE30", 50.0, registeredAt))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("new users")
+                .hasMessageContaining("30");
+    }
+
+    @Test
+    void validate_newUserOnlyDays_nullUserRegisteredAt_throws() {
+        Coupon c = TestFixtures.addCoupon(store, "NEWBIE30", CouponType.percentage, 10, 0);
+        c.setNewUserOnlyDays(30);
+        // No user registration date available
+        assertThatThrownBy(() -> helper.validateCoupon("NEWBIE30", 50.0, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("new users");
+    }
+
+    @Test
+    void validate_newUserOnlyDaysNull_anyUserAllowed() {
+        Coupon c = TestFixtures.addCoupon(store, "OPEN", CouponType.percentage, 10, 0);
+        // No new-user restriction — even an old user passes
+        Instant registeredLongAgo = Instant.now().minus(365, java.time.temporal.ChronoUnit.DAYS);
+        assertThatCode(() -> helper.validateCoupon("OPEN", 50.0, registeredLongAgo))
+                .doesNotThrowAnyException();
     }
 
     // ── tryValidateCoupon ─────────────────────────────────────────────────────
 
     @Test
     void tryValidate_invalidCoupon_returnsNull() {
-        assertThat(helper.tryValidateCoupon("NONE", 50.0)).isNull();
+        assertThat(helper.tryValidateCoupon("NONE", 50.0, null)).isNull();
     }
 
     @Test
     void tryValidate_validCoupon_returnsCoupon() {
         TestFixtures.addCoupon(store, "GOOD", CouponType.percentage, 20, 0);
-        assertThat(helper.tryValidateCoupon("GOOD", 50.0)).isNotNull();
+        assertThat(helper.tryValidateCoupon("GOOD", 50.0, null)).isNotNull();
+    }
+
+    @Test
+    void tryValidate_newUserOnlyFailed_returnsNull() {
+        Coupon c = TestFixtures.addCoupon(store, "NEWONLY", CouponType.percentage, 10, 0);
+        c.setNewUserOnlyDays(7);
+        Instant registeredAt = Instant.now().minus(30, java.time.temporal.ChronoUnit.DAYS);
+        assertThat(helper.tryValidateCoupon("NEWONLY", 50.0, registeredAt)).isNull();
     }
 
     // ── computeDiscount ───────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import com.bookstore.store.InMemoryStore;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Component
 public class CouponHelper {
@@ -18,8 +19,12 @@ public class CouponHelper {
 
     /**
      * Looks up and validates a coupon by code. Throws IllegalArgumentException if invalid.
+     *
+     * @param code             coupon code (case-insensitive)
+     * @param subtotal         order subtotal before discount
+     * @param userRegisteredAt user's account creation timestamp; used to check new-user-only criteria
      */
-    public Coupon validateCoupon(String code, double subtotal) {
+    public Coupon validateCoupon(String code, double subtotal, Instant userRegisteredAt) {
         String couponId = store.couponCodeIndex.get(code.toUpperCase());
         if (couponId == null) {
             throw new IllegalArgumentException("Coupon code not found: " + code);
@@ -38,15 +43,28 @@ public class CouponHelper {
             throw new IllegalArgumentException(
                     "Minimum order amount of " + coupon.getMinOrderAmount() + " not met");
         }
+        if (coupon.getNewUserOnlyDays() != null) {
+            if (userRegisteredAt == null) {
+                throw new IllegalArgumentException(
+                        "Coupon is only available to new users within "
+                        + coupon.getNewUserOnlyDays() + " days of registration");
+            }
+            Instant eligibleUntil = userRegisteredAt.plus(coupon.getNewUserOnlyDays(), ChronoUnit.DAYS);
+            if (Instant.now().isAfter(eligibleUntil)) {
+                throw new IllegalArgumentException(
+                        "Coupon is only available to new users within "
+                        + coupon.getNewUserOnlyDays() + " days of registration");
+            }
+        }
         return coupon;
     }
 
     /**
      * Attempts validation — returns coupon or null if invalid (silent, for checkout).
      */
-    public Coupon tryValidateCoupon(String code, double subtotal) {
+    public Coupon tryValidateCoupon(String code, double subtotal, Instant userRegisteredAt) {
         try {
-            return validateCoupon(code, subtotal);
+            return validateCoupon(code, subtotal, userRegisteredAt);
         } catch (IllegalArgumentException e) {
             return null;
         }

@@ -100,8 +100,10 @@ public class CartService {
     public EnrichedCartResponse applyCoupon(String userId, ApplyCouponRequest req) {
         Cart cart = store.carts.computeIfAbsent(userId, Cart::new);
         double subtotal = computeSubtotal(cart);
+        User user = store.users.get(userId);
+        Instant userRegisteredAt = user != null ? user.getCreatedAt() : null;
         try {
-            couponHelper.validateCoupon(req.getCode(), subtotal);
+            couponHelper.validateCoupon(req.getCode(), subtotal, userRegisteredAt);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
@@ -143,7 +145,9 @@ public class CartService {
         Map<String, Object> couponDetails = null;
 
         if (cart.getCouponCode() != null) {
-            Coupon coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal);
+            User user = store.users.get(cart.getUserId());
+            Instant userRegisteredAt = user != null ? user.getCreatedAt() : null;
+            Coupon coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal, userRegisteredAt);
             if (coupon != null) {
                 discountAmount = couponHelper.computeDiscount(coupon, subtotal);
                 couponDetails = new HashMap<>();
