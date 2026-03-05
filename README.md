@@ -104,6 +104,202 @@ bookstore/
 
 ---
 
+## Database Setup
+
+### 1. Start Oracle XE with Docker
+
+```bash
+docker run -d \
+  --name oracle-xe \
+  -p 1521:1521 \
+  -e ORACLE_PASSWORD=oracle \
+  gvenzl/oracle-xe
+```
+
+Wait ~60 seconds for the database to be ready. You can check with:
+
+```bash
+docker logs -f oracle-xe
+# Ready when you see: DATABASE IS READY TO USE!
+```
+
+### 2. (Optional) Create a Dedicated Database User
+
+The default config connects as `system`, which works but is not recommended for production. To use a dedicated schema:
+
+```sql
+-- Connect as system, then run:
+CREATE USER bookstore IDENTIFIED BY bookstore123;
+GRANT CONNECT, RESOURCE TO bookstore;
+GRANT UNLIMITED TABLESPACE TO bookstore;
+```
+
+Then update `backend/src/main/resources/application.properties`:
+
+```properties
+spring.datasource.url=jdbc:oracle:thin:@localhost:1521/XEPDB1
+spring.datasource.username=bookstore
+spring.datasource.password=bookstore123
+```
+
+### 3. Schema — Auto-Created by Hibernate
+
+Tables are created automatically on first startup via `spring.jpa.hibernate.ddl-auto=update`. No manual DDL is needed.
+
+The following 8 tables are created in the connected schema:
+
+| Table | Description |
+|-------|-------------|
+| `BS_USERS` | Registered users (customers and admins) |
+| `BS_BOOKS` | Book catalog |
+| `BS_CARTS` | One cart per user |
+| `BS_CART_ITEMS` | Line items inside a cart (collection table) |
+| `BS_ORDERS` | Placed orders |
+| `BS_ORDER_ITEMS` | Line items inside an order (collection table) |
+| `BS_ACCOUNTS` | Wallet balance per user |
+| `BS_TRANSACTIONS` | Wallet transaction history |
+| `BS_COUPONS` | Discount coupons |
+
+### 4. Reference DDL
+
+Equivalent Oracle DDL for the tables Hibernate generates (useful for auditing or manual setup):
+
+```sql
+-- Users
+CREATE TABLE BS_USERS (
+    ID            VARCHAR2(36)  NOT NULL PRIMARY KEY,
+    EMAIL         VARCHAR2(255) NOT NULL UNIQUE,
+    PASSWORD_HASH VARCHAR2(80)  NOT NULL,
+    NAME          VARCHAR2(255) NOT NULL,
+    ROLE          VARCHAR2(20)  NOT NULL,
+    CREATED_AT    TIMESTAMP     NOT NULL
+);
+
+-- Books
+CREATE TABLE BS_BOOKS (
+    ID          VARCHAR2(36)   NOT NULL PRIMARY KEY,
+    ISBN        VARCHAR2(50)   NOT NULL UNIQUE,
+    TITLE       VARCHAR2(500)  NOT NULL,
+    AUTHOR      VARCHAR2(255)  NOT NULL,
+    GENRE       VARCHAR2(100)  NOT NULL,
+    PRICE       NUMBER         NOT NULL,
+    STOCK       NUMBER(10)     NOT NULL,
+    DESCRIPTION VARCHAR2(2000),
+    CREATED_AT  TIMESTAMP      NOT NULL,
+    UPDATED_AT  TIMESTAMP      NOT NULL
+);
+
+-- Carts (one row per user)
+CREATE TABLE BS_CARTS (
+    USER_ID     VARCHAR2(36) NOT NULL PRIMARY KEY,
+    COUPON_CODE VARCHAR2(50),
+    UPDATED_AT  TIMESTAMP    NOT NULL
+);
+
+-- Cart line items
+CREATE TABLE BS_CART_ITEMS (
+    CART_USER_ID VARCHAR2(36) NOT NULL REFERENCES BS_CARTS(USER_ID),
+    BOOK_ID      VARCHAR2(36) NOT NULL,
+    QUANTITY     NUMBER(10)   NOT NULL,
+    PRICE_AT_ADD NUMBER       NOT NULL
+);
+
+-- Orders
+CREATE TABLE BS_ORDERS (
+    ID              VARCHAR2(36) NOT NULL PRIMARY KEY,
+    USER_ID         VARCHAR2(36) NOT NULL,
+    SUBTOTAL        NUMBER       NOT NULL,
+    DISCOUNT_AMOUNT NUMBER       NOT NULL,
+    TOTAL_AMOUNT    NUMBER       NOT NULL,
+    COUPON_CODE     VARCHAR2(50),
+    STATUS          VARCHAR2(20) NOT NULL
+        CHECK (STATUS IN ('PENDING','CONFIRMED','SHIPPED','DELIVERED','CANCELLED')),
+    CREATED_AT      TIMESTAMP    NOT NULL,
+    UPDATED_AT      TIMESTAMP    NOT NULL
+);
+
+-- Order line items
+CREATE TABLE BS_ORDER_ITEMS (
+    ORDER_ID      VARCHAR2(36)  NOT NULL REFERENCES BS_ORDERS(ID),
+    BOOK_ID       VARCHAR2(36)  NOT NULL,
+    TITLE         VARCHAR2(500) NOT NULL,
+    QUANTITY      NUMBER(10)    NOT NULL,
+    PRICE_AT_ORDER NUMBER       NOT NULL
+);
+
+-- Wallet accounts (one row per user)
+CREATE TABLE BS_ACCOUNTS (
+    USER_ID    VARCHAR2(36) NOT NULL PRIMARY KEY,
+    BALANCE    NUMBER       NOT NULL,
+    UPDATED_AT TIMESTAMP    NOT NULL
+);
+
+-- Wallet transaction history
+CREATE TABLE BS_TRANSACTIONS (
+    ID            VARCHAR2(36)  NOT NULL PRIMARY KEY,
+    USER_ID       VARCHAR2(36)  NOT NULL,
+    TYPE          VARCHAR2(30)  NOT NULL
+        CHECK (TYPE IN ('DEPOSIT','PURCHASE','REFUND')),
+    AMOUNT        NUMBER        NOT NULL,
+    BALANCE_AFTER NUMBER        NOT NULL,
+    DESCRIPTION   VARCHAR2(500),
+    ORDER_ID      VARCHAR2(36),
+    CREATED_AT    TIMESTAMP     NOT NULL
+);
+
+-- Discount coupons
+CREATE TABLE BS_COUPONS (
+    ID                 VARCHAR2(36)  NOT NULL PRIMARY KEY,
+    CODE               VARCHAR2(50)  NOT NULL UNIQUE,
+    TYPE               VARCHAR2(20)  NOT NULL
+        CHECK (TYPE IN ('percentage','fixed')),
+    COUPON_VALUE       NUMBER        NOT NULL,
+    MIN_ORDER_AMOUNT   NUMBER        NOT NULL,
+    MAX_USES           NUMBER(10),
+    USED_COUNT         NUMBER(10)    NOT NULL,
+    IS_ACTIVE          NUMBER(1)     NOT NULL,
+    EXPIRES_AT         TIMESTAMP,
+    CREATED_AT         TIMESTAMP     NOT NULL,
+    NEW_USER_ONLY_DAYS NUMBER(10),
+    DESCRIPTION        VARCHAR2(500)
+);
+```
+
+### 5. Verify the Tables
+
+After starting the backend, connect and confirm:
+
+```sql
+-- List all bookstore tables
+SELECT table_name FROM user_tables WHERE table_name LIKE 'BS\_%' ESCAPE '\' ORDER BY 1;
+
+-- Check seeded admin user
+SELECT id, email, role FROM bs_users;
+
+-- Check seeded books
+SELECT id, title, stock FROM bs_books ORDER BY created_at;
+```
+
+### 6. Reset the Schema
+
+To wipe all data and start fresh:
+
+```sql
+DROP TABLE BS_CART_ITEMS;
+DROP TABLE BS_ORDER_ITEMS;
+DROP TABLE BS_CARTS;
+DROP TABLE BS_ORDERS;
+DROP TABLE BS_TRANSACTIONS;
+DROP TABLE BS_ACCOUNTS;
+DROP TABLE BS_COUPONS;
+DROP TABLE BS_BOOKS;
+DROP TABLE BS_USERS;
+```
+
+Then restart the backend — Hibernate will recreate the tables and `DataSeeder` will re-seed the admin user and sample books.
+
+---
+
 ## Default Credentials
 
 The server seeds these on every fresh start:
