@@ -24,7 +24,8 @@ A full-stack bookstore application with a **Java Spring Boot** REST API backend 
 | Frontend | Angular 17 (standalone components, signals) |
 | Auth | JWT (Bearer token), BCrypt password hashing |
 | Validation | Jakarta Bean Validation |
-| Storage | In-memory `ConcurrentHashMap` (no database required) |
+| Database | Oracle XE (production), H2 in-memory Oracle mode (tests) |
+| ORM | Spring Data JPA (Hibernate 6) |
 | API Docs | SpringDoc / Swagger UI at `/docs` |
 
 ---
@@ -37,6 +38,19 @@ A full-stack bookstore application with a **Java Spring Boot** REST API backend 
 - Maven 3.9+
 - Node.js 18+ and npm (for the frontend)
 - Angular CLI 17: `npm install -g @angular/cli@17`
+- Docker (for Oracle XE database)
+
+### Start the Oracle Database
+
+```bash
+docker run -d \
+  --name oracle-xe \
+  -p 1521:1521 \
+  -e ORACLE_PASSWORD=oracle \
+  gvenzl/oracle-xe
+```
+
+The backend connects to `jdbc:oracle:thin:@localhost:1521/XEPDB1` with username `system` and password `oracle`. Adjust `backend/src/main/resources/application.properties` if your setup differs.
 
 ### Run the Backend
 
@@ -68,8 +82,9 @@ bookstore/
 │   ├── pom.xml
 │   └── src/main/java/com/bookstore/
 │       ├── config/             # SecurityConfig, CorsConfig, OpenApiConfig
-│       ├── model/              # Domain POJOs (User, Book, Cart, Order, Coupon, ...)
-│       ├── store/              # InMemoryStore (ConcurrentHashMaps)
+│       ├── model/              # JPA entities (User, Book, Cart, Order, Coupon, ...)
+│       ├── repository/         # Spring Data JPA repositories
+│       ├── store/              # InMemoryStore (unused; kept for reference)
 │       ├── security/           # JwtUtil, JwtAuthFilter, BookstorePrincipal
 │       ├── dto/                # Request/response DTOs
 │       ├── service/            # Business logic
@@ -213,10 +228,11 @@ All order endpoints require a Bearer token.
 
 ## Design Notes
 
-- **In-memory storage** — all data lives in Java `ConcurrentHashMap`s in `InMemoryStore` and resets on server restart. Replace with JPA + a database to make it persistent.
+- **Oracle DB persistence** — all data is stored in Oracle XE via Spring Data JPA. Tables are prefixed with `BS_` (e.g. `BS_USERS`, `BS_ORDERS`) to avoid Oracle reserved-word conflicts. Schema is auto-managed via `spring.jpa.hibernate.ddl-auto=update`.
+- **H2 for tests** — integration and unit tests use an H2 in-memory database in Oracle compatibility mode (`jdbc:h2:mem:testdb;MODE=Oracle`), so no Docker is needed to run the test suite.
 - **Price snapshots** — `priceAtAdd` and `priceAtOrder` capture the price at the time of the action, so changing a book's price never affects existing carts or order history.
-- **Stock atomicity** — `placeOrder` validates all items before mutating any stock inside a `synchronized(store)` block, preventing race conditions in concurrent requests.
-- **Admin role** — `DataSeeder` creates one admin on startup. To promote an existing user, add an admin-only endpoint or adjust the seeder.
+- **Stock atomicity** — `placeOrder` runs inside a `@Transactional` method, so database-level locking prevents race conditions in concurrent requests.
+- **Admin role** — `DataSeeder` creates one admin on startup if the users table is empty. To promote an existing user, add an admin-only endpoint or adjust the seeder.
 
 ---
 
