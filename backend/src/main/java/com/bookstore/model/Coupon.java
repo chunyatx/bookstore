@@ -1,20 +1,49 @@
 package com.bookstore.model;
 
+import jakarta.persistence.*;
 import java.time.Instant;
 
+@Entity
+@Table(name = "BS_COUPONS")
 public class Coupon {
+
+    @Id
+    @Column(name = "ID", length = 36, nullable = false)
     private String id;
+
+    @Column(name = "CODE", unique = true, nullable = false, length = 50)
     private String code;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "TYPE", length = 20, nullable = false)
     private CouponType type;
+
+    @Column(name = "COUPON_VALUE", nullable = false)
     private double value;
+
+    @Column(name = "DESCRIPTION", length = 500)
     private String description;
+
+    @Column(name = "MIN_ORDER_AMOUNT", nullable = false)
     private double minOrderAmount;
-    private Integer maxUses; // null = unlimited
+
+    @Column(name = "MAX_USES")
+    private Integer maxUses;
+
+    @Column(name = "USED_COUNT", nullable = false)
     private int usedCount;
+
+    @Column(name = "IS_ACTIVE", nullable = false)
     private boolean isActive;
-    private Instant expiresAt; // null = no expiry
+
+    @Column(name = "EXPIRES_AT")
+    private Instant expiresAt;
+
+    @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
-    private Integer newUserOnlyDays; // null = no restriction; N = only users registered within N days
+
+    @Column(name = "NEW_USER_ONLY_DAYS")
+    private Integer newUserOnlyDays;
 
     public Coupon() {}
 

@@ -24,7 +24,8 @@ A full-stack bookstore application with a **Java Spring Boot** REST API backend 
 | Frontend | Angular 17 (standalone components, signals) |
 | Auth | JWT (Bearer token), BCrypt password hashing |
 | Validation | Jakarta Bean Validation |
-| Storage | In-memory `ConcurrentHashMap` (no database required) |
+| Database | Oracle XE (production), H2 in-memory Oracle mode (tests) |
+| ORM | Spring Data JPA (Hibernate 6) |
 | API Docs | SpringDoc / Swagger UI at `/docs` |
 
 ---
@@ -37,6 +38,19 @@ A full-stack bookstore application with a **Java Spring Boot** REST API backend 
 - Maven 3.9+
 - Node.js 18+ and npm (for the frontend)
 - Angular CLI 17: `npm install -g @angular/cli@17`
+- Docker (for Oracle XE database)
+
+### Start the Oracle Database
+
+```bash
+docker run -d \
+  --name oracle-xe \
+  -p 1521:1521 \
+  -e ORACLE_PASSWORD=oracle \
+  gvenzl/oracle-xe
+```
+
+Then create the `bookstore` database user (see [Database Setup → Step 2](#2-create-the-bookstore-database-user) below). The backend connects to `jdbc:oracle:thin:@localhost:1521/XEPDB1` as `bookstore`.
 
 ### Run the Backend
 
@@ -68,8 +82,9 @@ bookstore/
 │   ├── pom.xml
 │   └── src/main/java/com/bookstore/
 │       ├── config/             # SecurityConfig, CorsConfig, OpenApiConfig
-│       ├── model/              # Domain POJOs (User, Book, Cart, Order, Coupon, ...)
-│       ├── store/              # InMemoryStore (ConcurrentHashMaps)
+│       ├── model/              # JPA entities (User, Book, Cart, Order, Coupon, ...)
+│       ├── repository/         # Spring Data JPA repositories
+│       ├── store/              # InMemoryStore (unused; kept for reference)
 │       ├── security/           # JwtUtil, JwtAuthFilter, BookstorePrincipal
 │       ├── dto/                # Request/response DTOs
 │       ├── service/            # Business logic
@@ -86,6 +101,202 @@ bookstore/
 │       └── components/         # navbar, auth, shop, cart, orders, admin
 └── plan/                       # Architecture docs
 ```
+
+---
+
+## Database Setup
+
+### 1. Start Oracle XE with Docker
+
+```bash
+docker run -d \
+  --name oracle-xe \
+  -p 1521:1521 \
+  -e ORACLE_PASSWORD=oracle \
+  gvenzl/oracle-xe
+```
+
+Wait ~60 seconds for the database to be ready. You can check with:
+
+```bash
+docker logs -f oracle-xe
+# Ready when you see: DATABASE IS READY TO USE!
+```
+
+### 2. Create the `bookstore` Database User
+
+The application connects as a dedicated `bookstore` schema user. Run the following as `system` (or any DBA user) before starting the backend:
+
+```sql
+-- Connect as system, then run:
+CREATE USER bookstore IDENTIFIED BY bookstore123;
+GRANT CONNECT, RESOURCE TO bookstore;
+GRANT UNLIMITED TABLESPACE TO bookstore;
+```
+
+These credentials are already configured in `backend/src/main/resources/application.properties`:
+
+```properties
+spring.datasource.url=jdbc:oracle:thin:@localhost:1521/XEPDB1
+spring.datasource.username=bookstore
+spring.datasource.password=bookstore123
+```
+
+### 3. Schema — Auto-Created by Hibernate
+
+Tables are created automatically on first startup via `spring.jpa.hibernate.ddl-auto=update`. No manual DDL is needed.
+
+The following 8 tables are created in the connected schema:
+
+| Table | Description |
+|-------|-------------|
+| `BS_USERS` | Registered users (customers and admins) |
+| `BS_BOOKS` | Book catalog |
+| `BS_CARTS` | One cart per user |
+| `BS_CART_ITEMS` | Line items inside a cart (collection table) |
+| `BS_ORDERS` | Placed orders |
+| `BS_ORDER_ITEMS` | Line items inside an order (collection table) |
+| `BS_ACCOUNTS` | Wallet balance per user |
+| `BS_TRANSACTIONS` | Wallet transaction history |
+| `BS_COUPONS` | Discount coupons |
+
+### 4. Reference DDL
+
+Equivalent Oracle DDL for the tables Hibernate generates (useful for auditing or manual setup):
+
+```sql
+-- Users
+CREATE TABLE BS_USERS (
+    ID            VARCHAR2(36)  NOT NULL PRIMARY KEY,
+    EMAIL         VARCHAR2(255) NOT NULL UNIQUE,
+    PASSWORD_HASH VARCHAR2(80)  NOT NULL,
+    NAME          VARCHAR2(255) NOT NULL,
+    ROLE          VARCHAR2(20)  NOT NULL,
+    CREATED_AT    TIMESTAMP     NOT NULL
+);
+
+-- Books
+CREATE TABLE BS_BOOKS (
+    ID          VARCHAR2(36)   NOT NULL PRIMARY KEY,
+    ISBN        VARCHAR2(50)   NOT NULL UNIQUE,
+    TITLE       VARCHAR2(500)  NOT NULL,
+    AUTHOR      VARCHAR2(255)  NOT NULL,
+    GENRE       VARCHAR2(100)  NOT NULL,
+    PRICE       NUMBER         NOT NULL,
+    STOCK       NUMBER(10)     NOT NULL,
+    DESCRIPTION VARCHAR2(2000),
+    CREATED_AT  TIMESTAMP      NOT NULL,
+    UPDATED_AT  TIMESTAMP      NOT NULL
+);
+
+-- Carts (one row per user)
+CREATE TABLE BS_CARTS (
+    USER_ID     VARCHAR2(36) NOT NULL PRIMARY KEY,
+    COUPON_CODE VARCHAR2(50),
+    UPDATED_AT  TIMESTAMP    NOT NULL
+);
+
+-- Cart line items
+CREATE TABLE BS_CART_ITEMS (
+    CART_USER_ID VARCHAR2(36) NOT NULL REFERENCES BS_CARTS(USER_ID),
+    BOOK_ID      VARCHAR2(36) NOT NULL,
+    QUANTITY     NUMBER(10)   NOT NULL,
+    PRICE_AT_ADD NUMBER       NOT NULL
+);
+
+-- Orders
+CREATE TABLE BS_ORDERS (
+    ID              VARCHAR2(36) NOT NULL PRIMARY KEY,
+    USER_ID         VARCHAR2(36) NOT NULL,
+    SUBTOTAL        NUMBER       NOT NULL,
+    DISCOUNT_AMOUNT NUMBER       NOT NULL,
+    TOTAL_AMOUNT    NUMBER       NOT NULL,
+    COUPON_CODE     VARCHAR2(50),
+    STATUS          VARCHAR2(20) NOT NULL
+        CHECK (STATUS IN ('PENDING','CONFIRMED','SHIPPED','DELIVERED','CANCELLED')),
+    CREATED_AT      TIMESTAMP    NOT NULL,
+    UPDATED_AT      TIMESTAMP    NOT NULL
+);
+
+-- Order line items
+CREATE TABLE BS_ORDER_ITEMS (
+    ORDER_ID      VARCHAR2(36)  NOT NULL REFERENCES BS_ORDERS(ID),
+    BOOK_ID       VARCHAR2(36)  NOT NULL,
+    TITLE         VARCHAR2(500) NOT NULL,
+    QUANTITY      NUMBER(10)    NOT NULL,
+    PRICE_AT_ORDER NUMBER       NOT NULL
+);
+
+-- Wallet accounts (one row per user)
+CREATE TABLE BS_ACCOUNTS (
+    USER_ID    VARCHAR2(36) NOT NULL PRIMARY KEY,
+    BALANCE    NUMBER       NOT NULL,
+    UPDATED_AT TIMESTAMP    NOT NULL
+);
+
+-- Wallet transaction history
+CREATE TABLE BS_TRANSACTIONS (
+    ID            VARCHAR2(36)  NOT NULL PRIMARY KEY,
+    USER_ID       VARCHAR2(36)  NOT NULL,
+    TYPE          VARCHAR2(30)  NOT NULL
+        CHECK (TYPE IN ('DEPOSIT','PURCHASE','REFUND')),
+    AMOUNT        NUMBER        NOT NULL,
+    BALANCE_AFTER NUMBER        NOT NULL,
+    DESCRIPTION   VARCHAR2(500),
+    ORDER_ID      VARCHAR2(36),
+    CREATED_AT    TIMESTAMP     NOT NULL
+);
+
+-- Discount coupons
+CREATE TABLE BS_COUPONS (
+    ID                 VARCHAR2(36)  NOT NULL PRIMARY KEY,
+    CODE               VARCHAR2(50)  NOT NULL UNIQUE,
+    TYPE               VARCHAR2(20)  NOT NULL
+        CHECK (TYPE IN ('percentage','fixed')),
+    COUPON_VALUE       NUMBER        NOT NULL,
+    MIN_ORDER_AMOUNT   NUMBER        NOT NULL,
+    MAX_USES           NUMBER(10),
+    USED_COUNT         NUMBER(10)    NOT NULL,
+    IS_ACTIVE          NUMBER(1)     NOT NULL,
+    EXPIRES_AT         TIMESTAMP,
+    CREATED_AT         TIMESTAMP     NOT NULL,
+    NEW_USER_ONLY_DAYS NUMBER(10),
+    DESCRIPTION        VARCHAR2(500)
+);
+```
+
+### 5. Verify the Tables
+
+After starting the backend, connect and confirm:
+
+```sql
+-- List all bookstore tables
+SELECT table_name FROM user_tables WHERE table_name LIKE 'BS\_%' ESCAPE '\' ORDER BY 1;
+
+-- Check seeded admin user
+SELECT id, email, role FROM bs_users;
+
+-- Check seeded books
+SELECT id, title, stock FROM bs_books ORDER BY created_at;
+```
+
+### 6. Reset the Schema
+
+To wipe all data and start fresh:
+
+```sql
+DROP TABLE BS_CART_ITEMS;
+DROP TABLE BS_ORDER_ITEMS;
+DROP TABLE BS_CARTS;
+DROP TABLE BS_ORDERS;
+DROP TABLE BS_TRANSACTIONS;
+DROP TABLE BS_ACCOUNTS;
+DROP TABLE BS_COUPONS;
+DROP TABLE BS_BOOKS;
+DROP TABLE BS_USERS;
+```
+
+Then restart the backend — Hibernate will recreate the tables and `DataSeeder` will re-seed the admin user and sample books.
 
 ---
 
@@ -213,10 +424,11 @@ All order endpoints require a Bearer token.
 
 ## Design Notes
 
-- **In-memory storage** — all data lives in Java `ConcurrentHashMap`s in `InMemoryStore` and resets on server restart. Replace with JPA + a database to make it persistent.
+- **Oracle DB persistence** — all data is stored in Oracle XE via Spring Data JPA. Tables are prefixed with `BS_` (e.g. `BS_USERS`, `BS_ORDERS`) to avoid Oracle reserved-word conflicts. Schema is auto-managed via `spring.jpa.hibernate.ddl-auto=update`.
+- **H2 for tests** — integration and unit tests use an H2 in-memory database in Oracle compatibility mode (`jdbc:h2:mem:testdb;MODE=Oracle`), so no Docker is needed to run the test suite.
 - **Price snapshots** — `priceAtAdd` and `priceAtOrder` capture the price at the time of the action, so changing a book's price never affects existing carts or order history.
-- **Stock atomicity** — `placeOrder` validates all items before mutating any stock inside a `synchronized(store)` block, preventing race conditions in concurrent requests.
-- **Admin role** — `DataSeeder` creates one admin on startup. To promote an existing user, add an admin-only endpoint or adjust the seeder.
+- **Stock atomicity** — `placeOrder` runs inside a `@Transactional` method, so database-level locking prevents race conditions in concurrent requests.
+- **Admin role** — `DataSeeder` creates one admin on startup if the users table is empty. To promote an existing user, add an admin-only endpoint or adjust the seeder.
 
 ---
 

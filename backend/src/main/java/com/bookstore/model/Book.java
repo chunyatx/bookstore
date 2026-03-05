@@ -1,17 +1,41 @@
 package com.bookstore.model;
 
+import jakarta.persistence.*;
 import java.time.Instant;
 
+@Entity
+@Table(name = "BS_BOOKS")
 public class Book {
+
+    @Id
+    @Column(name = "ID", length = 36, nullable = false)
     private String id;
+
+    @Column(name = "TITLE", nullable = false, length = 500)
     private String title;
+
+    @Column(name = "AUTHOR", nullable = false, length = 255)
     private String author;
+
+    @Column(name = "GENRE", nullable = false, length = 100)
     private String genre;
+
+    @Column(name = "PRICE", nullable = false)
     private double price;
+
+    @Column(name = "STOCK", nullable = false)
     private int stock;
+
+    @Column(name = "DESCRIPTION", length = 2000)
     private String description;
+
+    @Column(name = "ISBN", unique = true, nullable = false, length = 50)
     private String isbn;
+
+    @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
+
+    @Column(name = "UPDATED_AT", nullable = false)
     private Instant updatedAt;
 
     public Book() {}

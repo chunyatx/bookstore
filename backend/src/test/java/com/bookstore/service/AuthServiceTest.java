@@ -6,7 +6,6 @@ import com.bookstore.dto.response.AuthResponse;
 import com.bookstore.dto.response.UserResponse;
 import com.bookstore.model.User;
 import com.bookstore.security.BookstorePrincipal;
-import com.bookstore.store.InMemoryStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,15 +15,15 @@ import static org.assertj.core.api.Assertions.*;
 
 class AuthServiceTest {
 
-    private InMemoryStore store;
+    private MockRepositories mr;
     private PasswordEncoder encoder;
     private AuthService service;
 
     @BeforeEach
     void setUp() {
-        store = TestFixtures.freshStore();
+        mr = new MockRepositories();
         encoder = TestFixtures.passwordEncoder();
-        service = new AuthService(store, encoder, TestFixtures.jwtUtil());
+        service = new AuthService(mr.userRepo, mr.accountRepo, encoder, TestFixtures.jwtUtil());
     }
 
     // ── register ──────────────────────────────────────────────────────────────
@@ -37,21 +36,21 @@ class AuthServiceTest {
         assertThat(resp.getEmail()).isEqualTo("alice@example.com");
         assertThat(resp.getName()).isEqualTo("Alice");
         assertThat(resp.getRole()).isEqualTo("customer");
-        assertThat(store.users).hasSize(1);
-        assertThat(store.accounts.get(resp.getId()).getBalance()).isEqualTo(0.0);
+        assertThat(mr.users).hasSize(1);
+        assertThat(mr.accounts.get(resp.getId()).getBalance()).isEqualTo(0.0);
     }
 
     @Test
     void register_normalizesEmailToLowercase() {
         service.register(req("Alice@EXAMPLE.COM", "password1", "Alice"));
-        assertThat(store.emailIndex).containsKey("alice@example.com");
+        assertThat(mr.users.values().iterator().next().getEmail()).isEqualTo("alice@example.com");
     }
 
     @Test
     void register_passwordIsHashed() {
         RegisterRequest req = req("alice@example.com", "password1", "Alice");
         UserResponse resp = service.register(req);
-        User stored = store.users.get(resp.getId());
+        User stored = mr.users.get(resp.getId());
         assertThat(stored.getPasswordHash()).isNotEqualTo("password1");
         assertThat(encoder.matches("password1", stored.getPasswordHash())).isTrue();
     }

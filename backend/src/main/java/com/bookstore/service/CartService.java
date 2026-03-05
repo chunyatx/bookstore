@@ -5,9 +5,13 @@ import com.bookstore.dto.request.ApplyCouponRequest;
 import com.bookstore.dto.request.UpdateCartItemRequest;
 import com.bookstore.dto.response.EnrichedCartResponse;
 import com.bookstore.model.*;
-import com.bookstore.store.InMemoryStore;
+import com.bookstore.repository.BookRepository;
+import com.bookstore.repository.CartRepository;
+import com.bookstore.repository.CouponRepository;
+import com.bookstore.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -18,28 +22,38 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
+@Transactional
 public class CartService {
 
-    private final InMemoryStore store;
+    private final CartRepository cartRepository;
+    private final BookRepository bookRepository;
+    private final UserRepository userRepository;
     private final CouponHelper couponHelper;
 
-    public CartService(InMemoryStore store, CouponHelper couponHelper) {
-        this.store = store;
+    public CartService(CartRepository cartRepository, BookRepository bookRepository,
+                       UserRepository userRepository, CouponHelper couponHelper) {
+        this.cartRepository = cartRepository;
+        this.bookRepository = bookRepository;
+        this.userRepository = userRepository;
         this.couponHelper = couponHelper;
     }
 
+    private Cart getOrCreateCart(String userId) {
+        return cartRepository.findById(userId)
+                .orElseGet(() -> cartRepository.save(new Cart(userId)));
+    }
+
+    @Transactional(readOnly = true)
     public EnrichedCartResponse getCart(String userId) {
-        Cart cart = store.carts.computeIfAbsent(userId, Cart::new);
+        Cart cart = cartRepository.findById(userId).orElseGet(() -> new Cart(userId));
         return enrichCart(cart);
     }
 
     public EnrichedCartResponse addItem(String userId, AddToCartRequest req) {
-        Book book = store.books.get(req.getBookId());
-        if (book == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found");
-        }
+        Book book = bookRepository.findById(req.getBookId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
 
-        Cart cart = store.carts.computeIfAbsent(userId, Cart::new);
+        Cart cart = getOrCreateCart(userId);
         Optional<CartItem> existing = cart.getItems().stream()
                 .filter(i -> i.getBookId().equals(req.getBookId()))
                 .findFirst();
@@ -56,22 +70,18 @@ public class CartService {
             cart.getItems().add(new CartItem(book.getId(), newQty, book.getPrice()));
         }
         cart.setUpdatedAt(Instant.now());
-        return enrichCart(cart);
+        return enrichCart(cartRepository.save(cart));
     }
 
     public EnrichedCartResponse updateItem(String userId, String bookId, UpdateCartItemRequest req) {
-        Cart cart = store.carts.get(userId);
-        if (cart == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found");
-        }
+        Cart cart = cartRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found"));
 
         if (req.getQuantity() == 0) {
             cart.getItems().removeIf(i -> i.getBookId().equals(bookId));
         } else {
-            Book book = store.books.get(bookId);
-            if (book == null) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found");
-            }
+            Book book = bookRepository.findById(bookId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
             if (req.getQuantity() > book.getStock()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Insufficient stock. Available: " + book.getStock());
@@ -85,23 +95,23 @@ public class CartService {
             item.get().setQuantity(req.getQuantity());
         }
         cart.setUpdatedAt(Instant.now());
-        return enrichCart(cart);
+        return enrichCart(cartRepository.save(cart));
     }
 
     public void clearCart(String userId) {
-        Cart cart = store.carts.get(userId);
-        if (cart != null) {
+        cartRepository.findById(userId).ifPresent(cart -> {
             cart.setItems(new ArrayList<>());
             cart.setCouponCode(null);
             cart.setUpdatedAt(Instant.now());
-        }
+            cartRepository.save(cart);
+        });
     }
 
     public EnrichedCartResponse applyCoupon(String userId, ApplyCouponRequest req) {
-        Cart cart = store.carts.computeIfAbsent(userId, Cart::new);
+        Cart cart = getOrCreateCart(userId);
         double subtotal = computeSubtotal(cart);
-        User user = store.users.get(userId);
-        Instant userRegisteredAt = user != null ? user.getCreatedAt() : null;
+        Instant userRegisteredAt = userRepository.findById(userId)
+                .map(User::getCreatedAt).orElse(null);
         try {
             couponHelper.validateCoupon(req.getCode(), subtotal, userRegisteredAt);
         } catch (IllegalArgumentException e) {
@@ -109,14 +119,14 @@ public class CartService {
         }
         cart.setCouponCode(req.getCode());
         cart.setUpdatedAt(Instant.now());
-        return enrichCart(cart);
+        return enrichCart(cartRepository.save(cart));
     }
 
     public EnrichedCartResponse removeCoupon(String userId) {
-        Cart cart = store.carts.computeIfAbsent(userId, Cart::new);
+        Cart cart = getOrCreateCart(userId);
         cart.setCouponCode(null);
         cart.setUpdatedAt(Instant.now());
-        return enrichCart(cart);
+        return enrichCart(cartRepository.save(cart));
     }
 
     public EnrichedCartResponse enrichCart(Cart cart) {
@@ -129,7 +139,7 @@ public class CartService {
         double subtotal = 0;
 
         for (CartItem item : cart.getItems()) {
-            Book book = store.books.get(item.getBookId());
+            Book book = bookRepository.findById(item.getBookId()).orElse(null);
             String title = book != null ? book.getTitle() : "Unknown";
             String author = book != null ? book.getAuthor() : "Unknown";
             enrichedItems.add(new EnrichedCartResponse.EnrichedCartItem(
@@ -145,8 +155,8 @@ public class CartService {
         Map<String, Object> couponDetails = null;
 
         if (cart.getCouponCode() != null) {
-            User user = store.users.get(cart.getUserId());
-            Instant userRegisteredAt = user != null ? user.getCreatedAt() : null;
+            Instant userRegisteredAt = userRepository.findById(cart.getUserId())
+                    .map(User::getCreatedAt).orElse(null);
             Coupon coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal, userRegisteredAt);
             if (coupon != null) {
                 discountAmount = couponHelper.computeDiscount(coupon, subtotal);

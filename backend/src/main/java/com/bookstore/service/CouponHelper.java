@@ -2,7 +2,7 @@ package com.bookstore.service;
 
 import com.bookstore.model.Coupon;
 import com.bookstore.model.CouponType;
-import com.bookstore.store.InMemoryStore;
+import com.bookstore.repository.CouponRepository;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -11,26 +11,19 @@ import java.time.temporal.ChronoUnit;
 @Component
 public class CouponHelper {
 
-    private final InMemoryStore store;
+    private final CouponRepository couponRepository;
 
-    public CouponHelper(InMemoryStore store) {
-        this.store = store;
+    public CouponHelper(CouponRepository couponRepository) {
+        this.couponRepository = couponRepository;
     }
 
     /**
      * Looks up and validates a coupon by code. Throws IllegalArgumentException if invalid.
-     *
-     * @param code             coupon code (case-insensitive)
-     * @param subtotal         order subtotal before discount
-     * @param userRegisteredAt user's account creation timestamp; used to check new-user-only criteria
      */
     public Coupon validateCoupon(String code, double subtotal, Instant userRegisteredAt) {
-        String couponId = store.couponCodeIndex.get(code.toUpperCase());
-        if (couponId == null) {
-            throw new IllegalArgumentException("Coupon code not found: " + code);
-        }
-        Coupon coupon = store.coupons.get(couponId);
-        if (coupon == null || !coupon.isActive()) {
+        Coupon coupon = couponRepository.findByCode(code.toUpperCase())
+                .orElseThrow(() -> new IllegalArgumentException("Coupon code not found: " + code));
+        if (!coupon.isActive()) {
             throw new IllegalArgumentException("Coupon is not active");
         }
         if (coupon.getExpiresAt() != null && Instant.now().isAfter(coupon.getExpiresAt())) {

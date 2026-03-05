@@ -1,11 +1,12 @@
 package com.bookstore.seed;
 
 import com.bookstore.model.*;
-import com.bookstore.store.InMemoryStore;
+import com.bookstore.repository.*;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -13,18 +14,27 @@ import java.util.UUID;
 @Component
 public class DataSeeder implements ApplicationRunner {
 
-    private final InMemoryStore store;
+    private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
+    private final BookRepository bookRepository;
+    private final CouponRepository couponRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public DataSeeder(InMemoryStore store, PasswordEncoder passwordEncoder) {
-        this.store = store;
+    public DataSeeder(UserRepository userRepository, AccountRepository accountRepository,
+                      BookRepository bookRepository, CouponRepository couponRepository,
+                      PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.accountRepository = accountRepository;
+        this.bookRepository = bookRepository;
+        this.couponRepository = couponRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
+    @Transactional
     public void run(ApplicationArguments args) {
         // Only seed once — check if already seeded
-        if (!store.users.isEmpty()) return;
+        if (userRepository.count() > 0) return;
 
         seedAdmin();
         seedBooks();
@@ -36,9 +46,8 @@ public class DataSeeder implements ApplicationRunner {
         String id = UUID.randomUUID().toString();
         String email = "admin@bookstore.com";
         User admin = new User(id, email, passwordEncoder.encode("admin123"), "Admin", "admin", Instant.now());
-        store.users.put(id, admin);
-        store.emailIndex.put(email, id);
-        store.accounts.put(id, new Account(id, 0.0));
+        userRepository.save(admin);
+        accountRepository.save(new Account(id, 0.0));
     }
 
     private void seedBooks() {
@@ -92,10 +101,8 @@ public class DataSeeder implements ApplicationRunner {
     private void addBook(String title, String author, String genre, double price, int stock,
                          String description, String isbn) {
         Instant now = Instant.now();
-        Book book = new Book(UUID.randomUUID().toString(), title, author, genre, price, stock,
-                description, isbn, now, now);
-        store.books.put(book.getId(), book);
-        store.isbnIndex.put(isbn, book.getId());
+        bookRepository.save(new Book(UUID.randomUUID().toString(), title, author, genre,
+                price, stock, description, isbn, now, now));
     }
 
     private void seedCoupons() {
@@ -118,7 +125,6 @@ public class DataSeeder implements ApplicationRunner {
         coupon.setActive(true);
         coupon.setExpiresAt(expiresAt);
         coupon.setCreatedAt(Instant.now());
-        store.coupons.put(coupon.getId(), coupon);
-        store.couponCodeIndex.put(code, coupon.getId());
+        couponRepository.save(coupon);
     }
 }

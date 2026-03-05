@@ -4,9 +4,10 @@ import com.bookstore.dto.request.CreateBookRequest;
 import com.bookstore.dto.request.UpdateBookRequest;
 import com.bookstore.dto.response.PagedBooksResponse;
 import com.bookstore.model.Book;
-import com.bookstore.store.InMemoryStore;
+import com.bookstore.repository.BookRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -15,17 +16,19 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 @Service
+@Transactional
 public class BookService {
 
-    private final InMemoryStore store;
+    private final BookRepository bookRepository;
 
-    public BookService(InMemoryStore store) {
-        this.store = store;
+    public BookService(BookRepository bookRepository) {
+        this.bookRepository = bookRepository;
     }
 
+    @Transactional(readOnly = true)
     public PagedBooksResponse listBooks(String title, String author, String genre,
                                         Double minPrice, Double maxPrice, int page, int limit) {
-        Stream<Book> stream = store.books.values().stream();
+        Stream<Book> stream = bookRepository.findAllByOrderByCreatedAtAsc().stream();
 
         if (title != null && !title.isBlank()) {
             String t = title.toLowerCase();
@@ -46,8 +49,7 @@ public class BookService {
             stream = stream.filter(b -> b.getPrice() <= maxPrice);
         }
 
-        List<Book> all = stream.sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
-                               .toList();
+        List<Book> all = stream.toList();
         long total = all.size();
         int clampedLimit = Math.min(Math.max(limit, 1), 100);
         int safePage = Math.max(page, 1);
@@ -57,43 +59,36 @@ public class BookService {
         return new PagedBooksResponse(paged, total, page, clampedLimit);
     }
 
+    @Transactional(readOnly = true)
     public Book getBook(String id) {
-        Book book = store.books.get(id);
-        if (book == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found");
-        }
-        return book;
+        return bookRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
     }
 
     public Book createBook(CreateBookRequest req) {
         String normalizedIsbn = req.getIsbn().trim();
-        if (store.isbnIndex.containsKey(normalizedIsbn)) {
+        if (bookRepository.existsByIsbn(normalizedIsbn)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "ISBN already exists");
         }
 
         Instant now = Instant.now();
         Book book = new Book(
-            UUID.randomUUID().toString(),
-            req.getTitle().trim(),
-            req.getAuthor().trim(),
-            req.getGenre().trim(),
-            req.getPrice(),
-            req.getStock(),
-            req.getDescription() != null ? req.getDescription() : "",
-            normalizedIsbn,
-            now, now
+                UUID.randomUUID().toString(),
+                req.getTitle().trim(),
+                req.getAuthor().trim(),
+                req.getGenre().trim(),
+                req.getPrice(),
+                req.getStock(),
+                req.getDescription() != null ? req.getDescription() : "",
+                normalizedIsbn,
+                now, now
         );
-
-        store.books.put(book.getId(), book);
-        store.isbnIndex.put(normalizedIsbn, book.getId());
-        return book;
+        return bookRepository.save(book);
     }
 
     public Book updateBook(String id, UpdateBookRequest req) {
-        Book book = store.books.get(id);
-        if (book == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found");
-        }
+        Book book = bookRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
 
         if (req.getTitle() != null) book.setTitle(req.getTitle().trim());
         if (req.getAuthor() != null) book.setAuthor(req.getAuthor().trim());
@@ -104,23 +99,19 @@ public class BookService {
         if (req.getIsbn() != null) {
             String newIsbn = req.getIsbn().trim();
             if (!newIsbn.equals(book.getIsbn())) {
-                if (store.isbnIndex.containsKey(newIsbn)) {
+                if (bookRepository.existsByIsbn(newIsbn)) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "ISBN already exists");
                 }
-                store.isbnIndex.remove(book.getIsbn());
-                store.isbnIndex.put(newIsbn, book.getId());
                 book.setIsbn(newIsbn);
             }
         }
         book.setUpdatedAt(Instant.now());
-        return book;
+        return bookRepository.save(book);
     }
 
     public void deleteBook(String id) {
-        Book book = store.books.remove(id);
-        if (book == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found");
-        }
-        store.isbnIndex.remove(book.getIsbn());
+        Book book = bookRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
+        bookRepository.delete(book);
     }
 }
