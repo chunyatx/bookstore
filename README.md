@@ -50,7 +50,7 @@ docker run -d \
   gvenzl/oracle-xe
 ```
 
-The backend connects to `jdbc:oracle:thin:@localhost:1521/XEPDB1` with username `system` and password `oracle`. Adjust `backend/src/main/resources/application.properties` if your setup differs.
+Then create the `bookstore` database user (see [Database Setup → Step 2](#2-create-the-bookstore-database-user) below). The backend connects to `jdbc:oracle:thin:@localhost:1521/XEPDB1` as `bookstore`.
 
 ### Run the Backend
 
@@ -123,9 +123,9 @@ docker logs -f oracle-xe
 # Ready when you see: DATABASE IS READY TO USE!
 ```
 
-### 2. (Optional) Create a Dedicated Database User
+### 2. Create the `bookstore` Database User
 
-The default config connects as `system`, which works but is not recommended for production. To use a dedicated schema:
+The application connects as a dedicated `bookstore` schema user. Run the following as `system` (or any DBA user) before starting the backend:
 
 ```sql
 -- Connect as system, then run:
@@ -134,7 +134,7 @@ GRANT CONNECT, RESOURCE TO bookstore;
 GRANT UNLIMITED TABLESPACE TO bookstore;
 ```
 
-Then update `backend/src/main/resources/application.properties`:
+These credentials are already configured in `backend/src/main/resources/application.properties`:
 
 ```properties
 spring.datasource.url=jdbc:oracle:thin:@localhost:1521/XEPDB1
