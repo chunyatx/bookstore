@@ -161,7 +161,7 @@ Controllers are thin and delegate all business logic to services:
 | `OrderService` | Place order (atomic stock deduction + wallet debit), list, get, cancel |
 | `AccountService` | Get account info, load transactions |
 | `AdminService` | Manage customers, orders, books, coupons (admin-only operations) |
-| `CouponHelper` | `validateCoupon()`, `tryValidateCoupon()`, `computeDiscount()` |
+| `CouponHelper` | `validateCoupon(code, subtotal, userRegisteredAt)`, `tryValidateCoupon(code, subtotal, userRegisteredAt)` (returns null on invalid), `computeDiscount()` |
 
 ### Security
 
@@ -195,6 +195,7 @@ Services throw `ResponseStatusException` (e.g. `NOT_FOUND`, `BAD_REQUEST`, `CONF
 3. **Email case** — Always store and look up emails as `email.toLowerCase()`.
 4. **Coupon codes** — Always stored and looked up as `code.toUpperCase()`.
 5. **UUID IDs** — All entity IDs are `UUID.randomUUID().toString()`.
+6. **New-user-only coupons** — `CouponHelper.validateCoupon()` and `tryValidateCoupon()` require a third argument `Instant userRegisteredAt`. Callers (`CartService`, `OrderService`) must pass `user.getCreatedAt()`. A coupon with `newUserOnlyDays = N` rejects users whose account is older than N days.
 
 ---
 
@@ -272,7 +273,7 @@ Angular templates are embedded in TypeScript backtick strings. The `${{ }}` Angu
 cd backend && mvn test
 ```
 
-Total: **141 tests, 0 failures** as of last update.
+Total: **146 tests, 0 failures** as of last update.
 
 ---
 
@@ -392,6 +393,7 @@ Proxies all `/api` requests from `localhost:4200` to `localhost:8080` during `ng
 - **Stock mutations** — always validate before mutating; use `synchronized(store)` for multi-step stock changes.
 - **Coupon `expiresAt` parsing** — the `AdminService` parses datetime strings with `LocalDateTime` → `Instant` (UTC). Do not use `Instant.parse()` directly for user-supplied strings (they may lack the `Z` suffix).
 - **Integration test isolation** — never hardcode emails/ISBNs in integration tests; generate unique values per test to avoid collisions across the shared application context.
+- **New-user coupon callers** — `CouponHelper.validateCoupon()` and `tryValidateCoupon()` take a third `Instant userRegisteredAt` argument. Always pass `user.getCreatedAt()`; never call the two-argument overload (it no longer exists).
 
 ---
 
