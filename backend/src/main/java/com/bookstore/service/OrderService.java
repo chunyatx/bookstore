@@ -55,7 +55,9 @@ public class OrderService {
             String appliedCouponCode = null;
             Coupon coupon = null;
             if (cart.getCouponCode() != null) {
-                coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal);
+                User user = store.users.get(userId);
+                Instant userRegisteredAt = user != null ? user.getCreatedAt() : null;
+                coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal, userRegisteredAt);
                 if (coupon != null) {
                     discountAmount = couponHelper.computeDiscount(coupon, subtotal);
                     appliedCouponCode = coupon.getCode();

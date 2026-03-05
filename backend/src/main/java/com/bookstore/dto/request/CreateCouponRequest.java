@@ -24,6 +24,8 @@ public class CreateCouponRequest {
 
     private String expiresAt; // ISO-8601 string, null = no expiry
 
+    private Integer newUserOnlyDays; // null = no restriction; N = only users registered within N days
+
     public String getCode() { return code != null ? code.toUpperCase().trim() : null; }
     public void setCode(String code) { this.code = code; }
     public CouponType getType() { return type; }
@@ -38,4 +40,6 @@ public class CreateCouponRequest {
     public void setMaxUses(Integer maxUses) { this.maxUses = maxUses; }
     public String getExpiresAt() { return expiresAt; }
     public void setExpiresAt(String expiresAt) { this.expiresAt = expiresAt; }
+    public Integer getNewUserOnlyDays() { return newUserOnlyDays; }
+    public void setNewUserOnlyDays(Integer newUserOnlyDays) { this.newUserOnlyDays = newUserOnlyDays; }
 }

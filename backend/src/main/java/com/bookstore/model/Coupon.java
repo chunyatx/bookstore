@@ -14,6 +14,7 @@ public class Coupon {
     private boolean isActive;
     private Instant expiresAt; // null = no expiry
     private Instant createdAt;
+    private Integer newUserOnlyDays; // null = no restriction; N = only users registered within N days
 
     public Coupon() {}
 
@@ -39,4 +40,6 @@ public class Coupon {
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public Integer getNewUserOnlyDays() { return newUserOnlyDays; }
+    public void setNewUserOnlyDays(Integer newUserOnlyDays) { this.newUserOnlyDays = newUserOnlyDays; }
 }
