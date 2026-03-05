@@ -4,16 +4,17 @@ import com.bookstore.dto.request.AdjustBalanceRequest;
 import com.bookstore.dto.request.CreateCouponRequest;
 import com.bookstore.dto.request.UpdateOrderStatusRequest;
 import com.bookstore.model.*;
-import com.bookstore.store.InMemoryStore;
+import com.bookstore.repository.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class AdminService {
 
     private static final Map<String, String> STATUS_PROGRESSION = Map.of(
@@ -21,48 +22,49 @@ public class AdminService {
             "confirmed", "shipped"
     );
 
-    private final InMemoryStore store;
+    private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
+    private final OrderRepository orderRepository;
+    private final CouponRepository couponRepository;
 
-    public AdminService(InMemoryStore store) {
-        this.store = store;
+    public AdminService(UserRepository userRepository, AccountRepository accountRepository,
+                        TransactionRepository transactionRepository, OrderRepository orderRepository,
+                        CouponRepository couponRepository) {
+        this.userRepository = userRepository;
+        this.accountRepository = accountRepository;
+        this.transactionRepository = transactionRepository;
+        this.orderRepository = orderRepository;
+        this.couponRepository = couponRepository;
     }
 
-    // ── Customers ───────────────────────────────────────────────────────────
+    // ── Customers ────────────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> listCustomers() {
-        return store.users.values().stream()
-                .filter(u -> "customer".equals(u.getRole()))
+        return userRepository.findByRole("customer").stream()
                 .map(u -> {
-                    Account acc = store.accounts.get(u.getId());
-                    List<String> orders = store.getUserOrders(u.getId());
+                    Account acc = accountRepository.findById(u.getId()).orElse(null);
+                    long orderCount = orderRepository.findByUserIdOrderByCreatedAtDesc(u.getId()).size();
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", u.getId());
                     m.put("name", u.getName());
                     m.put("email", u.getEmail());
                     m.put("balance", acc != null ? acc.getBalance() : 0.0);
-                    m.put("orderCount", orders.size());
+                    m.put("orderCount", (int) orderCount);
                     m.put("createdAt", u.getCreatedAt());
                     return m;
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> getCustomerDetail(String userId) {
-        User user = store.users.get(userId);
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found");
-        }
-        Account acc = store.accounts.get(userId);
-        List<Transaction> transactions = store.getUserTransactions(userId).stream()
-                .map(store.transactions::get)
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(Transaction::getCreatedAt).reversed())
-                .collect(Collectors.toList());
-        List<Order> orders = store.getUserOrders(userId).stream()
-                .map(store.orders::get)
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(Order::getCreatedAt).reversed())
-                .collect(Collectors.toList());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+        Account acc = accountRepository.findById(userId).orElse(null);
+        List<Transaction> transactions = transactionRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
 
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", user.getId());
@@ -86,14 +88,10 @@ public class AdminService {
 
     private Map<String, Object> adjustBalance(String userId, double amount, String description,
                                                TransactionType type, boolean requireSufficientBalance) {
-        User user = store.users.get(userId);
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found");
-        }
-        Account account = store.accounts.get(userId);
-        if (account == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found");
-        }
+        userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+        Account account = accountRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
 
         double newBalance;
         if (type == TransactionType.credit) {
@@ -108,6 +106,7 @@ public class AdminService {
         Instant now = Instant.now();
         account.setBalance(newBalance);
         account.setUpdatedAt(now);
+        accountRepository.save(account);
 
         Transaction tx = new Transaction();
         tx.setId(UUID.randomUUID().toString());
@@ -117,26 +116,24 @@ public class AdminService {
         tx.setDescription(description);
         tx.setBalanceAfter(newBalance);
         tx.setCreatedAt(now);
-        store.transactions.put(tx.getId(), tx);
-        store.getUserTransactions(userId).add(tx.getId());
+        transactionRepository.save(tx);
 
         return Map.of("balance", newBalance, "transaction", tx);
     }
 
     // ── Orders ───────────────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public List<Order> listAllOrders(String statusFilter) {
-        return store.orders.values().stream()
-                .filter(o -> statusFilter == null || o.getStatus().name().equals(statusFilter))
-                .sorted(Comparator.comparing(Order::getCreatedAt).reversed())
-                .collect(Collectors.toList());
+        if (statusFilter != null) {
+            return orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.valueOf(statusFilter));
+        }
+        return orderRepository.findAllByOrderByCreatedAtDesc();
     }
 
     public Order updateOrderStatus(String orderId, UpdateOrderStatusRequest req) {
-        Order order = store.orders.get(orderId);
-        if (order == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
-        }
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         String currentStatus = order.getStatus().name();
         String requiredNext = STATUS_PROGRESSION.get(currentStatus);
         if (requiredNext == null || !requiredNext.equals(req.getStatus())) {
@@ -145,62 +142,56 @@ public class AdminService {
         }
         order.setStatus(OrderStatus.valueOf(req.getStatus()));
         order.setUpdatedAt(Instant.now());
-        return order;
+        return orderRepository.save(order);
     }
 
     public Order refundOrder(String orderId) {
-        synchronized (store) {
-            Order order = store.orders.get(orderId);
-            if (order == null) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
-            }
-            if (order.getStatus() == OrderStatus.cancelled) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order already cancelled");
-            }
-            if (order.getStatus() == OrderStatus.shipped) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot refund shipped orders via this endpoint");
-            }
-
-            Instant now = Instant.now();
-            Account account = store.accounts.get(order.getUserId());
-            if (account == null) {
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Account not found for user: " + order.getUserId());
-            }
-            double refund = order.getTotalAmount();
-            double newBalance = Math.round((account.getBalance() + refund) * 100.0) / 100.0;
-            account.setBalance(newBalance);
-            account.setUpdatedAt(now);
-
-            Transaction tx = new Transaction();
-            tx.setId(UUID.randomUUID().toString());
-            tx.setUserId(order.getUserId());
-            tx.setType(TransactionType.refund);
-            tx.setAmount(refund);
-            tx.setDescription("Admin refund for order " + orderId);
-            tx.setOrderId(orderId);
-            tx.setBalanceAfter(newBalance);
-            tx.setCreatedAt(now);
-            store.transactions.put(tx.getId(), tx);
-            store.getUserTransactions(order.getUserId()).add(tx.getId());
-
-            order.setStatus(OrderStatus.cancelled);
-            order.setUpdatedAt(now);
-            return order;
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (order.getStatus() == OrderStatus.cancelled) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order already cancelled");
         }
+        if (order.getStatus() == OrderStatus.shipped) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot refund shipped orders via this endpoint");
+        }
+
+        Instant now = Instant.now();
+        Account account = accountRepository.findById(order.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Account not found for user: " + order.getUserId()));
+        double refund = order.getTotalAmount();
+        double newBalance = Math.round((account.getBalance() + refund) * 100.0) / 100.0;
+        account.setBalance(newBalance);
+        account.setUpdatedAt(now);
+        accountRepository.save(account);
+
+        Transaction tx = new Transaction();
+        tx.setId(UUID.randomUUID().toString());
+        tx.setUserId(order.getUserId());
+        tx.setType(TransactionType.refund);
+        tx.setAmount(refund);
+        tx.setDescription("Admin refund for order " + orderId);
+        tx.setOrderId(orderId);
+        tx.setBalanceAfter(newBalance);
+        tx.setCreatedAt(now);
+        transactionRepository.save(tx);
+
+        order.setStatus(OrderStatus.cancelled);
+        order.setUpdatedAt(now);
+        return orderRepository.save(order);
     }
 
     // ── Coupons ──────────────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public List<Coupon> listCoupons() {
-        return store.coupons.values().stream()
-                .sorted(Comparator.comparing(Coupon::getCreatedAt).reversed())
-                .collect(Collectors.toList());
+        return couponRepository.findAllByOrderByCreatedAtDesc();
     }
 
     public Coupon createCoupon(CreateCouponRequest req) {
-        String code = req.getCode(); // already UPPERCASE via getter
-        if (store.couponCodeIndex.containsKey(code)) {
+        String code = req.getCode();
+        if (couponRepository.existsByCode(code)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Coupon code already exists");
         }
         if (req.getType() == CouponType.percentage && req.getValue() > 100) {
@@ -225,19 +216,13 @@ public class AdminService {
                     "Invalid expiresAt format — use ISO-8601 (e.g. 2026-12-31T23:59:59Z)");
         }
         coupon.setCreatedAt(Instant.now());
-
-        store.coupons.put(coupon.getId(), coupon);
-        store.couponCodeIndex.put(code, coupon.getId());
-        return coupon;
+        return couponRepository.save(coupon);
     }
 
     public Coupon setActiveCoupon(String code, boolean active) {
-        String couponId = store.couponCodeIndex.get(code.toUpperCase());
-        if (couponId == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Coupon not found");
-        }
-        Coupon coupon = store.coupons.get(couponId);
+        Coupon coupon = couponRepository.findByCode(code.toUpperCase())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Coupon not found"));
         coupon.setActive(active);
-        return coupon;
+        return couponRepository.save(coupon);
     }
 }

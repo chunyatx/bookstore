@@ -6,7 +6,6 @@ import com.bookstore.dto.request.UpdateCartItemRequest;
 import com.bookstore.dto.response.EnrichedCartResponse;
 import com.bookstore.model.Book;
 import com.bookstore.model.CouponType;
-import com.bookstore.store.InMemoryStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,20 +15,20 @@ import static org.assertj.core.api.Assertions.*;
 
 class CartServiceTest {
 
-    private InMemoryStore store;
+    private MockRepositories mr;
     private CartService service;
     private String userId;
     private Book book;
 
     @BeforeEach
     void setUp() {
-        store = TestFixtures.freshStore();
+        mr = new MockRepositories();
         PasswordEncoder encoder = TestFixtures.passwordEncoder();
-        service = new CartService(store, new CouponHelper(store));
+        service = new CartService(mr.cartRepo, mr.bookRepo, mr.userRepo, new CouponHelper(mr.couponRepo));
 
-        var user = TestFixtures.addUser(store, encoder, "user@test.com", "pass", "User", "customer");
+        var user = TestFixtures.addUser(mr, encoder, "user@test.com", "pass", "User", "customer");
         userId = user.getId();
-        book = TestFixtures.addBook(store, "Test Book", "Author", "Genre", 10.0, 5, "9780000000001");
+        book = TestFixtures.addBook(mr, "Test Book", "Author", "Genre", 10.0, 5, "9780000000001");
     }
 
     // ── getCart ───────────────────────────────────────────────────────────────
@@ -55,10 +54,8 @@ class CartServiceTest {
     @Test
     void addItem_snapshotsPriceAtAddTime() {
         service.addItem(userId, addReq(book.getId(), 1));
-        // Change the book price after adding
         book.setPrice(99.99);
         EnrichedCartResponse cart = service.getCart(userId);
-        // Price in cart should still be the original 10.0
         assertThat(cart.getItems().get(0).getPriceAtAdd()).isEqualTo(10.0);
     }
 
@@ -135,7 +132,7 @@ class CartServiceTest {
 
     @Test
     void clearCart_removesAppliedCoupon() {
-        TestFixtures.addCoupon(store, "SAVE10", CouponType.percentage, 10, 0);
+        TestFixtures.addCoupon(mr, "SAVE10", CouponType.percentage, 10, 0);
         service.addItem(userId, addReq(book.getId(), 1));
         service.applyCoupon(userId, couponReq("SAVE10"));
         service.clearCart(userId);
@@ -146,8 +143,8 @@ class CartServiceTest {
 
     @Test
     void applyCoupon_validCode_appliesDiscount() {
-        TestFixtures.addCoupon(store, "SAVE10", CouponType.percentage, 10, 0);
-        service.addItem(userId, addReq(book.getId(), 2));  // subtotal = 20.0
+        TestFixtures.addCoupon(mr, "SAVE10", CouponType.percentage, 10, 0);
+        service.addItem(userId, addReq(book.getId(), 2));
         EnrichedCartResponse cart = service.applyCoupon(userId, couponReq("SAVE10"));
 
         assertThat(cart.getCouponCode()).isEqualTo("SAVE10");
@@ -163,8 +160,8 @@ class CartServiceTest {
 
     @Test
     void applyCoupon_belowMinOrder_throws() {
-        TestFixtures.addCoupon(store, "MIN50", CouponType.fixed, 5, 50.0);
-        service.addItem(userId, addReq(book.getId(), 1));  // subtotal = 10.0
+        TestFixtures.addCoupon(mr, "MIN50", CouponType.fixed, 5, 50.0);
+        service.addItem(userId, addReq(book.getId(), 1));
         assertThatThrownBy(() -> service.applyCoupon(userId, couponReq("MIN50")))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Minimum order amount");
@@ -174,7 +171,7 @@ class CartServiceTest {
 
     @Test
     void removeCoupon_clearsCouponAndRestoresTotal() {
-        TestFixtures.addCoupon(store, "SAVE10", CouponType.percentage, 10, 0);
+        TestFixtures.addCoupon(mr, "SAVE10", CouponType.percentage, 10, 0);
         service.addItem(userId, addReq(book.getId(), 1));
         service.applyCoupon(userId, couponReq("SAVE10"));
         EnrichedCartResponse cart = service.removeCoupon(userId);
@@ -188,11 +185,10 @@ class CartServiceTest {
 
     @Test
     void enrichCart_expiredCoupon_silentlyClearedOnGet() {
-        var coupon = TestFixtures.addCoupon(store, "OLD", CouponType.percentage, 10, 0);
+        var coupon = TestFixtures.addCoupon(mr, "OLD", CouponType.percentage, 10, 0);
         service.addItem(userId, addReq(book.getId(), 1));
         service.applyCoupon(userId, couponReq("OLD"));
 
-        // Expire the coupon after it was applied
         coupon.setExpiresAt(java.time.Instant.now().minusSeconds(1));
 
         EnrichedCartResponse cart = service.getCart(userId);

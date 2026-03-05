@@ -1,38 +1,34 @@
 package com.bookstore.store;
 
 import com.bookstore.model.*;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Component
+/**
+ * Legacy in-memory store — retained for unit test use only.
+ * The application now uses JPA repositories backed by Oracle DB.
+ */
 public class InMemoryStore {
 
-    // Books
     public final ConcurrentHashMap<String, Book> books = new ConcurrentHashMap<>();
-    public final ConcurrentHashMap<String, String> isbnIndex = new ConcurrentHashMap<>(); // isbn -> bookId
+    public final ConcurrentHashMap<String, String> isbnIndex = new ConcurrentHashMap<>();
 
-    // Users
     public final ConcurrentHashMap<String, User> users = new ConcurrentHashMap<>();
-    public final ConcurrentHashMap<String, String> emailIndex = new ConcurrentHashMap<>(); // email -> userId
+    public final ConcurrentHashMap<String, String> emailIndex = new ConcurrentHashMap<>();
 
-    // Carts (userId -> Cart)
     public final ConcurrentHashMap<String, Cart> carts = new ConcurrentHashMap<>();
 
-    // Orders
     public final ConcurrentHashMap<String, Order> orders = new ConcurrentHashMap<>();
-    public final ConcurrentHashMap<String, List<String>> userOrders = new ConcurrentHashMap<>(); // userId -> [orderId]
+    public final ConcurrentHashMap<String, List<String>> userOrders = new ConcurrentHashMap<>();
 
-    // Accounts & Transactions
     public final ConcurrentHashMap<String, Account> accounts = new ConcurrentHashMap<>();
     public final ConcurrentHashMap<String, Transaction> transactions = new ConcurrentHashMap<>();
-    public final ConcurrentHashMap<String, List<String>> userTransactions = new ConcurrentHashMap<>(); // userId -> [txId]
+    public final ConcurrentHashMap<String, List<String>> userTransactions = new ConcurrentHashMap<>();
 
-    // Coupons
     public final ConcurrentHashMap<String, Coupon> coupons = new ConcurrentHashMap<>();
-    public final ConcurrentHashMap<String, String> couponCodeIndex = new ConcurrentHashMap<>(); // UPPER_CODE -> couponId
+    public final ConcurrentHashMap<String, String> couponCodeIndex = new ConcurrentHashMap<>();
 
     public List<String> getUserOrders(String userId) {
         return userOrders.computeIfAbsent(userId, k -> new ArrayList<>());

@@ -4,7 +4,6 @@ import com.bookstore.dto.request.AdjustBalanceRequest;
 import com.bookstore.dto.request.CreateCouponRequest;
 import com.bookstore.dto.request.UpdateOrderStatusRequest;
 import com.bookstore.model.*;
-import com.bookstore.store.InMemoryStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,7 +16,7 @@ import static org.assertj.core.api.Assertions.*;
 
 class AdminServiceTest {
 
-    private InMemoryStore store;
+    private MockRepositories mr;
     private AdminService service;
     private OrderService orderService;
     private String customerId;
@@ -25,17 +24,18 @@ class AdminServiceTest {
 
     @BeforeEach
     void setUp() {
-        store = TestFixtures.freshStore();
+        mr = new MockRepositories();
         PasswordEncoder encoder = TestFixtures.passwordEncoder();
-        service = new AdminService(store);
-        orderService = new OrderService(store, new CouponHelper(store));
+        service = new AdminService(mr.userRepo, mr.accountRepo, mr.txRepo, mr.orderRepo, mr.couponRepo);
+        orderService = new OrderService(mr.cartRepo, mr.bookRepo, mr.orderRepo, mr.accountRepo,
+                mr.txRepo, mr.userRepo, new CouponHelper(mr.couponRepo));
 
-        var customer = TestFixtures.addUser(store, encoder, "cust@test.com", "p", "Customer", "customer");
+        var customer = TestFixtures.addUser(mr, encoder, "cust@test.com", "p", "Customer", "customer");
         customerId = customer.getId();
-        TestFixtures.addUser(store, encoder, "admin@test.com", "p", "Admin", "admin");
+        TestFixtures.addUser(mr, encoder, "admin@test.com", "p", "Admin", "admin");
 
-        book = TestFixtures.addBook(store, "Book", "Author", "Genre", 10.0, 10, "9780000000001");
-        TestFixtures.credit(store, customerId, 100.0);
+        book = TestFixtures.addBook(mr, "Book", "Author", "Genre", 10.0, 10, "9780000000001");
+        TestFixtures.credit(mr, customerId, 100.0);
     }
 
     // ── listCustomers ─────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ class AdminServiceTest {
 
     @Test
     void getCustomerDetail_returnsUserWithTransactionsAndOrders() {
-        TestFixtures.addToCart(store, customerId, book.getId(), 1, 10.0);
+        TestFixtures.addToCart(mr, customerId, book.getId(), 1, 10.0);
         orderService.placeOrder(customerId);
 
         Map<String, Object> detail = service.getCustomerDetail(customerId);
@@ -79,14 +79,13 @@ class AdminServiceTest {
     @Test
     void creditCustomer_increasesBalance() {
         service.creditCustomer(customerId, adjustReq(50.0, "Bonus"));
-        assertThat(store.accounts.get(customerId).getBalance()).isEqualTo(150.0);
+        assertThat(mr.accounts.get(customerId).getBalance()).isEqualTo(150.0);
     }
 
     @Test
     void creditCustomer_recordsTransaction() {
         service.creditCustomer(customerId, adjustReq(50.0, "Bonus"));
-        long credits = store.getUserTransactions(customerId).stream()
-                .map(store.transactions::get)
+        long credits = mr.getUserTransactions(customerId).stream()
                 .filter(tx -> tx.getType() == TransactionType.credit)
                 .count();
         assertThat(credits).isEqualTo(1);
@@ -104,7 +103,7 @@ class AdminServiceTest {
     @Test
     void debitCustomer_decreasesBalance() {
         service.debitCustomer(customerId, adjustReq(30.0, "Fee"));
-        assertThat(store.accounts.get(customerId).getBalance()).isEqualTo(70.0);
+        assertThat(mr.accounts.get(customerId).getBalance()).isEqualTo(70.0);
     }
 
     @Test
@@ -119,8 +118,7 @@ class AdminServiceTest {
     @Test
     void updateOrderStatus_pendingToConfirmed_succeeds() {
         Order order = placeTestOrder();
-        UpdateOrderStatusRequest req = statusReq("confirmed");
-        Order updated = service.updateOrderStatus(order.getId(), req);
+        Order updated = service.updateOrderStatus(order.getId(), statusReq("confirmed"));
         assertThat(updated.getStatus()).isEqualTo(OrderStatus.confirmed);
     }
 
@@ -161,24 +159,23 @@ class AdminServiceTest {
     @Test
     void refundOrder_pendingOrder_refundsWalletAndCancels() {
         Order order = placeTestOrder();
-        double balanceBefore = store.accounts.get(customerId).getBalance();
+        double balanceBefore = mr.accounts.get(customerId).getBalance();
 
         Order refunded = service.refundOrder(order.getId());
 
         assertThat(refunded.getStatus()).isEqualTo(OrderStatus.cancelled);
-        assertThat(store.accounts.get(customerId).getBalance())
+        assertThat(mr.accounts.get(customerId).getBalance())
                 .isEqualTo(balanceBefore + order.getTotalAmount());
     }
 
     @Test
     void refundOrder_doesNotRestoreStock() {
         Order order = placeTestOrder();
-        int stockAfterOrder = store.books.get(book.getId()).getStock();
+        int stockAfterOrder = mr.books.get(book.getId()).getStock();
 
         service.refundOrder(order.getId());
 
-        // Stock must remain at post-order level (admin refund doesn't restore stock)
-        assertThat(store.books.get(book.getId()).getStock()).isEqualTo(stockAfterOrder);
+        assertThat(mr.books.get(book.getId()).getStock()).isEqualTo(stockAfterOrder);
     }
 
     @Test
@@ -205,7 +202,7 @@ class AdminServiceTest {
     void createCoupon_valid_storesAndReturns() {
         Coupon c = service.createCoupon(couponReq("PROMO", CouponType.percentage, 20, 0, null, null));
         assertThat(c.getCode()).isEqualTo("PROMO");
-        assertThat(store.couponCodeIndex).containsKey("PROMO");
+        assertThat(mr.coupons.values().stream().anyMatch(x -> x.getCode().equals("PROMO"))).isTrue();
     }
 
     @Test
@@ -244,17 +241,17 @@ class AdminServiceTest {
 
     @Test
     void deactivateCoupon_setsInactive() {
-        TestFixtures.addCoupon(store, "CODE", CouponType.fixed, 5, 0);
+        TestFixtures.addCoupon(mr, "CODE", CouponType.fixed, 5, 0);
         Coupon c = service.setActiveCoupon("CODE", false);
         assertThat(c.isActive()).isFalse();
     }
 
     @Test
     void activateCoupon_setsActive() {
-        Coupon c = TestFixtures.addCoupon(store, "OFF", CouponType.fixed, 5, 0);
+        Coupon c = TestFixtures.addCoupon(mr, "OFF", CouponType.fixed, 5, 0);
         c.setActive(false);
         service.setActiveCoupon("OFF", true);
-        assertThat(store.coupons.get(c.getId()).isActive()).isTrue();
+        assertThat(mr.coupons.get(c.getId()).isActive()).isTrue();
     }
 
     @Test
@@ -267,7 +264,7 @@ class AdminServiceTest {
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private Order placeTestOrder() {
-        TestFixtures.addToCart(store, customerId, book.getId(), 1, book.getPrice());
+        TestFixtures.addToCart(mr, customerId, book.getId(), 1, book.getPrice());
         return orderService.placeOrder(customerId);
     }
 

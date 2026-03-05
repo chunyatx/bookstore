@@ -1,13 +1,29 @@
 package com.bookstore.model;
 
+import jakarta.persistence.*;
 import java.time.Instant;
 
+@Entity
+@Table(name = "BS_USERS")
 public class User {
+
+    @Id
+    @Column(name = "ID", length = 36, nullable = false)
     private String id;
+
+    @Column(name = "EMAIL", unique = true, nullable = false, length = 255)
     private String email;
+
+    @Column(name = "PASSWORD_HASH", nullable = false, length = 80)
     private String passwordHash;
+
+    @Column(name = "NAME", nullable = false, length = 255)
     private String name;
-    private String role; // "customer" | "admin"
+
+    @Column(name = "ROLE", nullable = false, length = 20)
+    private String role;
+
+    @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
 
     public User() {}
