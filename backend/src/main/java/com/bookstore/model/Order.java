@@ -1,18 +1,44 @@
 package com.bookstore.model;
 
+import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.List;
 
+@Entity
+@Table(name = "BS_ORDERS")
 public class Order {
+
+    @Id
+    @Column(name = "ID", length = 36, nullable = false)
     private String id;
+
+    @Column(name = "USER_ID", length = 36, nullable = false)
     private String userId;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "BS_ORDER_ITEMS", joinColumns = @JoinColumn(name = "ORDER_ID"))
     private List<OrderItem> items;
+
+    @Column(name = "SUBTOTAL", nullable = false)
     private double subtotal;
+
+    @Column(name = "DISCOUNT_AMOUNT", nullable = false)
     private double discountAmount;
+
+    @Column(name = "TOTAL_AMOUNT", nullable = false)
     private double totalAmount;
+
+    @Column(name = "COUPON_CODE", length = 50)
     private String couponCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "STATUS", length = 20, nullable = false)
     private OrderStatus status;
+
+    @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
+
+    @Column(name = "UPDATED_AT", nullable = false)
     private Instant updatedAt;
 
     public Order() {}

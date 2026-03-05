@@ -1,6 +1,7 @@
 package com.bookstore.integration;
 
-import com.bookstore.store.InMemoryStore;
+import com.bookstore.repository.AccountRepository;
+import com.bookstore.repository.BookRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests covering the full cart → order flow.
  *
  * Each test creates isolated users (unique emails) and books (unique ISBNs),
- * so tests do not interfere with each other in the shared InMemoryStore.
+ * so tests do not interfere with each other in the shared H2 database.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
@@ -29,7 +30,8 @@ class CartOrderIntegrationTest {
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
-    @Autowired InMemoryStore store;
+    @Autowired BookRepository bookRepository;
+    @Autowired AccountRepository accountRepository;
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -48,13 +50,12 @@ class CartOrderIntegrationTest {
     private JsonNode registerCustomer() throws Exception {
         String email = "cust_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
 
-        String regResp = mvc.perform(post("/api/auth/register")
+        mvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"email":"%s","password":"pass1234","name":"Customer"}
                         """.formatted(email)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
+                .andExpect(status().isCreated());
 
         String loginResp = mvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -98,6 +99,14 @@ class CartOrderIntegrationTest {
                         {"amount":%.2f,"description":"Test credit"}
                         """.formatted(amount)))
                 .andExpect(status().isOk());
+    }
+
+    private int getStock(String bookId) {
+        return bookRepository.findById(bookId).orElseThrow().getStock();
+    }
+
+    private double getBalance(String userId) {
+        return accountRepository.findById(userId).orElseThrow().getBalance();
     }
 
     // ── cart operations ───────────────────────────────────────────────────────
@@ -260,17 +269,15 @@ class CartOrderIntegrationTest {
     void placeOrder_fullHappyPath_deductsWalletAndStock() throws Exception {
         String adminTok = adminToken();
         String bookId = createBook(adminTok, 10);
-        int stockBefore = store.books.get(bookId).getStock();
+        int stockBefore = getStock(bookId);
 
         JsonNode customer = registerCustomer();
         String customerId = customer.get("id").asText();
         String customerTok = customer.get("token").asText();
 
-        // Fund wallet
         creditWallet(adminTok, customerId, 100.0);
-        double balanceBefore = store.accounts.get(customerId).getBalance();
+        double balanceBefore = getBalance(customerId);
 
-        // Add to cart
         mvc.perform(post("/api/cart/items")
                 .header("Authorization", "Bearer " + customerTok)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -279,7 +286,6 @@ class CartOrderIntegrationTest {
                         """.formatted(bookId)))
                 .andExpect(status().isOk());
 
-        // Place order
         String orderResp = mvc.perform(post("/api/orders")
                 .header("Authorization", "Bearer " + customerTok))
                 .andExpect(status().isCreated())
@@ -290,18 +296,13 @@ class CartOrderIntegrationTest {
 
         String orderId = mapper.readTree(orderResp).get("id").asText();
 
-        // Verify stock decremented
-        assertThat(store.books.get(bookId).getStock()).isEqualTo(stockBefore - 2);
+        assertThat(getStock(bookId)).isEqualTo(stockBefore - 2);
+        assertThat(getBalance(customerId)).isEqualTo(balanceBefore - 40.0);
 
-        // Verify wallet deducted
-        assertThat(store.accounts.get(customerId).getBalance()).isEqualTo(balanceBefore - 40.0);
-
-        // Cart should be empty
         mvc.perform(get("/api/cart")
                 .header("Authorization", "Bearer " + customerTok))
                 .andExpect(jsonPath("$.items", hasSize(0)));
 
-        // Order appears in list
         mvc.perform(get("/api/orders")
                 .header("Authorization", "Bearer " + customerTok))
                 .andExpect(status().isOk())
@@ -326,7 +327,6 @@ class CartOrderIntegrationTest {
         JsonNode customer = registerCustomer();
         String token = customer.get("token").asText();
 
-        // No wallet credit — balance = 0
         mvc.perform(post("/api/cart/items")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -347,7 +347,7 @@ class CartOrderIntegrationTest {
     void cancelOrder_pendingOrder_refundsWalletAndRestoresStock() throws Exception {
         String adminTok = adminToken();
         String bookId = createBook(adminTok, 10);
-        int stockBefore = store.books.get(bookId).getStock();
+        int stockBefore = getStock(bookId);
 
         JsonNode customer = registerCustomer();
         String customerId = customer.get("id").asText();
@@ -369,19 +369,15 @@ class CartOrderIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         String orderId = mapper.readTree(orderResp).get("id").asText();
-        double balanceAfterOrder = store.accounts.get(customerId).getBalance();
+        double balanceAfterOrder = getBalance(customerId);
 
-        // Cancel the order
         mvc.perform(patch("/api/orders/" + orderId + "/cancel")
                 .header("Authorization", "Bearer " + customerTok))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("cancelled"));
 
-        // Stock restored
-        assertThat(store.books.get(bookId).getStock()).isEqualTo(stockBefore);
-
-        // Wallet refunded
-        assertThat(store.accounts.get(customerId).getBalance()).isEqualTo(balanceAfterOrder + 20.0);
+        assertThat(getStock(bookId)).isEqualTo(stockBefore);
+        assertThat(getBalance(customerId)).isEqualTo(balanceAfterOrder + 20.0);
     }
 
     @Test
@@ -410,7 +406,6 @@ class CartOrderIntegrationTest {
 
         String orderId = mapper.readTree(orderResp).get("id").asText();
 
-        // Advance to confirmed
         mvc.perform(patch("/api/admin/orders/" + orderId + "/status")
                 .header("Authorization", "Bearer " + adminTok)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -419,7 +414,6 @@ class CartOrderIntegrationTest {
                         """))
                 .andExpect(status().isOk());
 
-        // Attempt to cancel confirmed order
         mvc.perform(patch("/api/orders/" + orderId + "/cancel")
                 .header("Authorization", "Bearer " + customerTok))
                 .andExpect(status().isBadRequest())
@@ -449,7 +443,6 @@ class CartOrderIntegrationTest {
 
         String orderId = mapper.readTree(orderResp).get("id").asText();
 
-        // Attacker registers separately
         JsonNode attacker = registerCustomer();
 
         mvc.perform(patch("/api/orders/" + orderId + "/cancel")
@@ -457,7 +450,7 @@ class CartOrderIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    // ── admin order operations ─────────────────────────────────────────────────
+    // ── admin order operations ────────────────────────────────────────────────
 
     @Test
     void adminAdvanceStatus_pendingToConfirmedToShipped_succeeds() throws Exception {

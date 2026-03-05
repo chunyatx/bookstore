@@ -6,68 +6,65 @@ import com.bookstore.dto.response.AuthResponse;
 import com.bookstore.dto.response.UserResponse;
 import com.bookstore.model.Account;
 import com.bookstore.model.User;
+import com.bookstore.repository.AccountRepository;
+import com.bookstore.repository.UserRepository;
 import com.bookstore.security.BookstorePrincipal;
 import com.bookstore.security.JwtUtil;
-import com.bookstore.store.InMemoryStore;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Service
+@Transactional
 public class AuthService {
 
-    private final InMemoryStore store;
+    private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
-    public AuthService(InMemoryStore store, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
-        this.store = store;
+    public AuthService(UserRepository userRepository, AccountRepository accountRepository,
+                       PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+        this.userRepository = userRepository;
+        this.accountRepository = accountRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
     }
 
     public UserResponse register(RegisterRequest req) {
         String normalizedEmail = req.getEmail().toLowerCase().trim();
-        if (store.emailIndex.containsKey(normalizedEmail)) {
+        if (userRepository.existsByEmail(normalizedEmail)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
 
-        String id = UUID.randomUUID().toString();
-        String passwordHash = passwordEncoder.encode(req.getPassword());
-        User user = new User(id, normalizedEmail, passwordHash, req.getName().trim(), "customer", Instant.now());
-        store.users.put(id, user);
-        store.emailIndex.put(normalizedEmail, id);
-
-        // Create wallet account with $0 balance
-        store.accounts.put(id, new Account(id, 0.0));
-
+        User user = new User(UUID.randomUUID().toString(), normalizedEmail,
+                passwordEncoder.encode(req.getPassword()), req.getName().trim(), "customer", Instant.now());
+        userRepository.save(user);
+        accountRepository.save(new Account(user.getId(), 0.0));
         return UserResponse.from(user);
     }
 
+    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest req) {
         String normalizedEmail = req.getEmail().toLowerCase().trim();
-        String userId = store.emailIndex.get(normalizedEmail);
-        if (userId == null) {
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+        if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
-        User user = store.users.get(userId);
-        if (user == null || !passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
-        }
-
         String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole());
         return new AuthResponse(token, UserResponse.from(user));
     }
 
+    @Transactional(readOnly = true)
     public UserResponse getMe(BookstorePrincipal principal) {
-        User user = store.users.get(principal.userId());
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
-        }
+        User user = userRepository.findById(principal.userId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         return UserResponse.from(user);
     }
 }
