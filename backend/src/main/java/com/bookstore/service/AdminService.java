@@ -209,7 +209,8 @@ public class AdminService {
         coupon.setUsedCount(0);
         coupon.setActive(true);
         coupon.setNewUserOnlyDays(req.getNewUserOnlyDays());
-        coupon.setAllowedUserId(req.getAllowedUserId());
+        coupon.setAllowedUserIds(req.getAllowedUserIds() != null
+                ? new java.util.HashSet<>(req.getAllowedUserIds()) : new java.util.HashSet<>());
         try {
             coupon.setExpiresAt(req.getExpiresAt() != null ? Instant.parse(req.getExpiresAt()) : null);
         } catch (java.time.format.DateTimeParseException e) {

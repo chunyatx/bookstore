@@ -38,7 +38,7 @@ import { ToastService } from '../../../services/toast.service';
             <td>{{ c.usedCount }} / {{ c.maxUses ?? '∞' }}</td>
             <td>\${{ c.minOrderAmount | number:'1.2-2' }}</td>
             <td>{{ c.newUserOnlyDays != null ? 'Within ' + c.newUserOnlyDays + ' days' : '—' }}</td>
-            <td>{{ c.allowedUserId ?? '—' }}</td>
+            <td>{{ c.allowedUserIds?.length ? c.allowedUserIds.length + ' account(s)' : '—' }}</td>
             <td>
               <span [style.color]="c.active ? '#16a34a' : '#dc2626'" [style.fontWeight]="600">
                 {{ c.active ? 'Active' : 'Inactive' }}
@@ -96,8 +96,8 @@ import { ToastService } from '../../../services/toast.service';
             <input type="number" [(ngModel)]="newUserOnlyDays" min="1" placeholder="e.g. 30" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
           </div>
           <div class="form-group" style="margin-top:10px;">
-            <label>Restrict to Account ID (blank=all accounts)</label>
-            <input [(ngModel)]="newAllowedUserId" placeholder="e.g. user-uuid" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
+            <label>Restrict to Account IDs (comma-separated, blank=all accounts)</label>
+            <textarea [(ngModel)]="newAllowedUserIds" placeholder="uuid-1, uuid-2, uuid-3" rows="2" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;resize:vertical;"></textarea>
           </div>
           <div style="display:flex;gap:8px;margin-top:16px;">
             <button class="btn btn-secondary" (click)="createModal.set(false)">Cancel</button>
@@ -120,7 +120,7 @@ export class AdminCouponsComponent implements OnInit {
   newMaxUses: number | null = null;
   newExpiresAt = '';
   newUserOnlyDays: number | null = null;
-  newAllowedUserId = '';
+  newAllowedUserIds = '';
 
   constructor(private adminService: AdminService, private toast: ToastService) {}
 
@@ -151,7 +151,7 @@ export class AdminCouponsComponent implements OnInit {
       maxUses: this.newMaxUses || null,
       expiresAt: this.newExpiresAt ? new Date(this.newExpiresAt).toISOString() : null,
       newUserOnlyDays: this.newUserOnlyDays || null,
-      allowedUserId: this.newAllowedUserId.trim() || null
+      allowedUserIds: this.newAllowedUserIds.split(',').map(s => s.trim()).filter(s => s.length > 0)
     };
     if (!body.code || !body.description || !body.value) {
       this.toast.show('Please fill required fields', 'error');

@@ -2,6 +2,7 @@ package com.bookstore.dto.request;
 
 import com.bookstore.model.CouponType;
 import jakarta.validation.constraints.*;
+import java.util.List;
 
 public class CreateCouponRequest {
 
@@ -26,8 +27,7 @@ public class CreateCouponRequest {
 
     private Integer newUserOnlyDays; // null = no restriction; N = only users registered within N days
 
-    @Size(max = 36)
-    private String allowedUserId; // null = any user; set to restrict coupon to a specific account
+    private List<String> allowedUserIds; // null or empty = any user; set to restrict to specific accounts
 
     public String getCode() { return code != null ? code.toUpperCase().trim() : null; }
     public void setCode(String code) { this.code = code; }
@@ -45,6 +45,6 @@ public class CreateCouponRequest {
     public void setExpiresAt(String expiresAt) { this.expiresAt = expiresAt; }
     public Integer getNewUserOnlyDays() { return newUserOnlyDays; }
     public void setNewUserOnlyDays(Integer newUserOnlyDays) { this.newUserOnlyDays = newUserOnlyDays; }
-    public String getAllowedUserId() { return allowedUserId != null ? allowedUserId.trim() : null; }
-    public void setAllowedUserId(String allowedUserId) { this.allowedUserId = allowedUserId; }
+    public List<String> getAllowedUserIds() { return allowedUserIds; }
+    public void setAllowedUserIds(List<String> allowedUserIds) { this.allowedUserIds = allowedUserIds; }
 }

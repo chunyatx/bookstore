@@ -51,8 +51,8 @@ public class CouponHelper {
                         + coupon.getNewUserOnlyDays() + " days of registration");
             }
         }
-        if (coupon.getAllowedUserId() != null) {
-            if (!coupon.getAllowedUserId().equals(userId)) {
+        if (!coupon.getAllowedUserIds().isEmpty()) {
+            if (userId == null || !coupon.getAllowedUserIds().contains(userId)) {
                 throw new IllegalArgumentException("Coupon is not valid for this account");
             }
         }

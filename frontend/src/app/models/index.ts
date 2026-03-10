@@ -105,7 +105,7 @@ export interface Coupon {
   expiresAt: string | null;
   createdAt: string;
   newUserOnlyDays: number | null;
-  allowedUserId: string | null;
+  allowedUserIds: string[];
 }
 
 export interface CustomerSummary {

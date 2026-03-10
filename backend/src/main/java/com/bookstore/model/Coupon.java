@@ -2,6 +2,8 @@ package com.bookstore.model;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "BS_COUPONS")
@@ -45,8 +47,11 @@ public class Coupon {
     @Column(name = "NEW_USER_ONLY_DAYS")
     private Integer newUserOnlyDays;
 
-    @Column(name = "ALLOWED_USER_ID", length = 36)
-    private String allowedUserId;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "BS_COUPON_ALLOWED_USERS",
+            joinColumns = @JoinColumn(name = "COUPON_ID"))
+    @Column(name = "USER_ID", length = 36)
+    private Set<String> allowedUserIds = new HashSet<>();
 
     public Coupon() {}
 
@@ -74,6 +79,6 @@ public class Coupon {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Integer getNewUserOnlyDays() { return newUserOnlyDays; }
     public void setNewUserOnlyDays(Integer newUserOnlyDays) { this.newUserOnlyDays = newUserOnlyDays; }
-    public String getAllowedUserId() { return allowedUserId; }
-    public void setAllowedUserId(String allowedUserId) { this.allowedUserId = allowedUserId; }
+    public Set<String> getAllowedUserIds() { return allowedUserIds; }
+    public void setAllowedUserIds(Set<String> allowedUserIds) { this.allowedUserIds = allowedUserIds != null ? allowedUserIds : new HashSet<>(); }
 }
