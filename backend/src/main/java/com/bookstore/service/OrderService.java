@@ -62,14 +62,19 @@ public class OrderService {
         }
         subtotal = Math.round(subtotal * 100.0) / 100.0;
 
-        // 3. Re-validate coupon (silently ignore if invalid)
+        // 3. Load account early (needed for account level in coupon validation)
+        Account account = accountRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Insufficient wallet balance. Balance: 0, Required: " + subtotal));
+
+        // 4. Re-validate coupon (silently ignore if invalid)
         double discountAmount = 0;
         String appliedCouponCode = null;
         Coupon coupon = null;
         if (cart.getCouponCode() != null) {
             Instant userRegisteredAt = userRepository.findById(userId)
                     .map(User::getCreatedAt).orElse(null);
-            coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal, userRegisteredAt);
+            coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal, userRegisteredAt, account.getLevel());
             if (coupon != null) {
                 discountAmount = couponHelper.computeDiscount(coupon, subtotal);
                 appliedCouponCode = coupon.getCode();
@@ -78,17 +83,14 @@ public class OrderService {
 
         double totalAmount = Math.max(0, Math.round((subtotal - discountAmount) * 100.0) / 100.0);
 
-        // 4. Check wallet balance
-        Account account = accountRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Insufficient wallet balance. Balance: 0, Required: " + totalAmount));
+        // 5. Check wallet balance
         if (account.getBalance() < totalAmount) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Insufficient wallet balance. Balance: " + account.getBalance() +
                     ", Required: " + totalAmount);
         }
 
-        // 5. All validations passed — begin mutations
+        // 6. All validations passed — begin mutations
 
         // Decrement stock
         for (CartItem item : cart.getItems()) {

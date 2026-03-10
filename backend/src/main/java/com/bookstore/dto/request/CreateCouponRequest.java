@@ -26,6 +26,9 @@ public class CreateCouponRequest {
 
     private Integer newUserOnlyDays; // null = no restriction; N = only users registered within N days
 
+    @Size(max = 50)
+    private String accountLevel; // null = all accounts; set to restrict to a specific account level
+
     public String getCode() { return code != null ? code.toUpperCase().trim() : null; }
     public void setCode(String code) { this.code = code; }
     public CouponType getType() { return type; }
@@ -42,4 +45,6 @@ public class CreateCouponRequest {
     public void setExpiresAt(String expiresAt) { this.expiresAt = expiresAt; }
     public Integer getNewUserOnlyDays() { return newUserOnlyDays; }
     public void setNewUserOnlyDays(Integer newUserOnlyDays) { this.newUserOnlyDays = newUserOnlyDays; }
+    public String getAccountLevel() { return accountLevel != null ? accountLevel.trim() : null; }
+    public void setAccountLevel(String accountLevel) { this.accountLevel = accountLevel; }
 }

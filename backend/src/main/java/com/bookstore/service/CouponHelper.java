@@ -19,8 +19,10 @@ public class CouponHelper {
 
     /**
      * Looks up and validates a coupon by code. Throws IllegalArgumentException if invalid.
+     *
+     * @param accountLevel the current user's account level (nullable); checked against coupon restriction
      */
-    public Coupon validateCoupon(String code, double subtotal, Instant userRegisteredAt) {
+    public Coupon validateCoupon(String code, double subtotal, Instant userRegisteredAt, String accountLevel) {
         Coupon coupon = couponRepository.findByCode(code.toUpperCase())
                 .orElseThrow(() -> new IllegalArgumentException("Coupon code not found: " + code));
         if (!coupon.isActive()) {
@@ -49,15 +51,23 @@ public class CouponHelper {
                         + coupon.getNewUserOnlyDays() + " days of registration");
             }
         }
+        if (coupon.getAccountLevel() != null) {
+            if (accountLevel == null || !coupon.getAccountLevel().equalsIgnoreCase(accountLevel)) {
+                throw new IllegalArgumentException(
+                        "Coupon is restricted to account level: " + coupon.getAccountLevel());
+            }
+        }
         return coupon;
     }
 
     /**
      * Attempts validation — returns coupon or null if invalid (silent, for checkout).
+     *
+     * @param accountLevel the current user's account level (nullable)
      */
-    public Coupon tryValidateCoupon(String code, double subtotal, Instant userRegisteredAt) {
+    public Coupon tryValidateCoupon(String code, double subtotal, Instant userRegisteredAt, String accountLevel) {
         try {
-            return validateCoupon(code, subtotal, userRegisteredAt);
+            return validateCoupon(code, subtotal, userRegisteredAt, accountLevel);
         } catch (IllegalArgumentException e) {
             return null;
         }

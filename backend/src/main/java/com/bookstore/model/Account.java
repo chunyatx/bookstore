@@ -17,6 +17,9 @@ public class Account {
     @Column(name = "UPDATED_AT", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "ACCOUNT_LEVEL", length = 50)
+    private String level;
+
     public Account() {}
 
     public Account(String userId, double balance) {
@@ -31,4 +34,6 @@ public class Account {
     public void setBalance(double balance) { this.balance = balance; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public String getLevel() { return level; }
+    public void setLevel(String level) { this.level = level; }
 }

@@ -24,6 +24,10 @@ export class AdminService {
     return this.http.post(`/api/admin/customers/${userId}/debit`, { amount, description });
   }
 
+  setCustomerLevel(userId: string, level: string | null): Observable<any> {
+    return this.http.patch(`/api/admin/customers/${userId}/level`, { level });
+  }
+
   // Orders
   listOrders(status?: string): Observable<Order[]> {
     let params = new HttpParams();

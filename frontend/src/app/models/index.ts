@@ -105,6 +105,7 @@ export interface Coupon {
   expiresAt: string | null;
   createdAt: string;
   newUserOnlyDays: number | null;
+  accountLevel: string | null;
 }
 
 export interface CustomerSummary {
@@ -114,6 +115,7 @@ export interface CustomerSummary {
   balance: number;
   orderCount: number;
   createdAt: string;
+  accountLevel: string | null;
 }
 
 export interface CustomerDetail extends CustomerSummary {
