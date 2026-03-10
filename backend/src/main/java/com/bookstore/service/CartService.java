@@ -4,8 +4,11 @@ import com.bookstore.dto.request.AddToCartRequest;
 import com.bookstore.dto.request.ApplyCouponRequest;
 import com.bookstore.dto.request.UpdateCartItemRequest;
 import com.bookstore.dto.response.EnrichedCartResponse;
-import com.bookstore.model.*;
-import com.bookstore.repository.AccountRepository;
+import com.bookstore.model.Book;
+import com.bookstore.model.Cart;
+import com.bookstore.model.CartItem;
+import com.bookstore.model.Coupon;
+import com.bookstore.model.User;
 import com.bookstore.repository.BookRepository;
 import com.bookstore.repository.CartRepository;
 import com.bookstore.repository.CouponRepository;
@@ -29,16 +32,13 @@ public class CartService {
     private final CartRepository cartRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
-    private final AccountRepository accountRepository;
     private final CouponHelper couponHelper;
 
     public CartService(CartRepository cartRepository, BookRepository bookRepository,
-                       UserRepository userRepository, AccountRepository accountRepository,
-                       CouponHelper couponHelper) {
+                       UserRepository userRepository, CouponHelper couponHelper) {
         this.cartRepository = cartRepository;
         this.bookRepository = bookRepository;
         this.userRepository = userRepository;
-        this.accountRepository = accountRepository;
         this.couponHelper = couponHelper;
     }
 
@@ -116,10 +116,8 @@ public class CartService {
         double subtotal = computeSubtotal(cart);
         Instant userRegisteredAt = userRepository.findById(userId)
                 .map(User::getCreatedAt).orElse(null);
-        String accountLevel = accountRepository.findById(userId)
-                .map(Account::getLevel).orElse(null);
         try {
-            couponHelper.validateCoupon(req.getCode(), subtotal, userRegisteredAt, accountLevel);
+            couponHelper.validateCoupon(req.getCode(), subtotal, userRegisteredAt, userId);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
@@ -163,9 +161,7 @@ public class CartService {
         if (cart.getCouponCode() != null) {
             Instant userRegisteredAt = userRepository.findById(cart.getUserId())
                     .map(User::getCreatedAt).orElse(null);
-            String accountLevel = accountRepository.findById(cart.getUserId())
-                    .map(Account::getLevel).orElse(null);
-            Coupon coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal, userRegisteredAt, accountLevel);
+            Coupon coupon = couponHelper.tryValidateCoupon(cart.getCouponCode(), subtotal, userRegisteredAt, cart.getUserId());
             if (coupon != null) {
                 discountAmount = couponHelper.computeDiscount(coupon, subtotal);
                 couponDetails = new HashMap<>();

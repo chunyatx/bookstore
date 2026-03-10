@@ -28,7 +28,7 @@ import { ToastService } from '../../../services/toast.service';
 
       <table>
         <thead>
-          <tr><th>Code</th><th>Type</th><th>Value</th><th>Used/Max</th><th>Min Order</th><th>New Users Only</th><th>Account Level</th><th>Status</th><th>Actions</th></tr>
+          <tr><th>Code</th><th>Type</th><th>Value</th><th>Used/Max</th><th>Min Order</th><th>New Users Only</th><th>Allowed Account</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
           <tr *ngFor="let c of coupons()">
@@ -38,7 +38,7 @@ import { ToastService } from '../../../services/toast.service';
             <td>{{ c.usedCount }} / {{ c.maxUses ?? '∞' }}</td>
             <td>\${{ c.minOrderAmount | number:'1.2-2' }}</td>
             <td>{{ c.newUserOnlyDays != null ? 'Within ' + c.newUserOnlyDays + ' days' : '—' }}</td>
-            <td>{{ c.accountLevel ?? '—' }}</td>
+            <td>{{ c.allowedUserId ?? '—' }}</td>
             <td>
               <span [style.color]="c.active ? '#16a34a' : '#dc2626'" [style.fontWeight]="600">
                 {{ c.active ? 'Active' : 'Inactive' }}
@@ -96,8 +96,8 @@ import { ToastService } from '../../../services/toast.service';
             <input type="number" [(ngModel)]="newUserOnlyDays" min="1" placeholder="e.g. 30" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
           </div>
           <div class="form-group" style="margin-top:10px;">
-            <label>Account Level (blank=all accounts)</label>
-            <input [(ngModel)]="newAccountLevel" placeholder="e.g. A00001" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
+            <label>Restrict to Account ID (blank=all accounts)</label>
+            <input [(ngModel)]="newAllowedUserId" placeholder="e.g. user-uuid" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
           </div>
           <div style="display:flex;gap:8px;margin-top:16px;">
             <button class="btn btn-secondary" (click)="createModal.set(false)">Cancel</button>
@@ -120,7 +120,7 @@ export class AdminCouponsComponent implements OnInit {
   newMaxUses: number | null = null;
   newExpiresAt = '';
   newUserOnlyDays: number | null = null;
-  newAccountLevel = '';
+  newAllowedUserId = '';
 
   constructor(private adminService: AdminService, private toast: ToastService) {}
 
@@ -151,7 +151,7 @@ export class AdminCouponsComponent implements OnInit {
       maxUses: this.newMaxUses || null,
       expiresAt: this.newExpiresAt ? new Date(this.newExpiresAt).toISOString() : null,
       newUserOnlyDays: this.newUserOnlyDays || null,
-      accountLevel: this.newAccountLevel.trim() || null
+      allowedUserId: this.newAllowedUserId.trim() || null
     };
     if (!body.code || !body.description || !body.value) {
       this.toast.show('Please fill required fields', 'error');

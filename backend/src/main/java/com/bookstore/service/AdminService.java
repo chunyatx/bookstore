@@ -53,7 +53,6 @@ public class AdminService {
                     m.put("balance", acc != null ? acc.getBalance() : 0.0);
                     m.put("orderCount", (int) orderCount);
                     m.put("createdAt", u.getCreatedAt());
-                    m.put("accountLevel", acc != null ? acc.getLevel() : null);
                     return m;
                 })
                 .toList();
@@ -77,17 +76,6 @@ public class AdminService {
         m.put("transactions", transactions);
         m.put("orders", orders);
         return m;
-    }
-
-    public Map<String, Object> setCustomerLevel(String userId, String level) {
-        userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
-        Account account = accountRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
-        account.setLevel(level != null && !level.isBlank() ? level.trim() : null);
-        account.setUpdatedAt(Instant.now());
-        accountRepository.save(account);
-        return Map.of("userId", userId, "level", level != null ? level.trim() : "");
     }
 
     public Map<String, Object> creditCustomer(String userId, AdjustBalanceRequest req) {
@@ -221,7 +209,7 @@ public class AdminService {
         coupon.setUsedCount(0);
         coupon.setActive(true);
         coupon.setNewUserOnlyDays(req.getNewUserOnlyDays());
-        coupon.setAccountLevel(req.getAccountLevel());
+        coupon.setAllowedUserId(req.getAllowedUserId());
         try {
             coupon.setExpiresAt(req.getExpiresAt() != null ? Instant.parse(req.getExpiresAt()) : null);
         } catch (java.time.format.DateTimeParseException e) {

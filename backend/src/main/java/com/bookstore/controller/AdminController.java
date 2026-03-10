@@ -2,7 +2,6 @@ package com.bookstore.controller;
 
 import com.bookstore.dto.request.AdjustBalanceRequest;
 import com.bookstore.dto.request.CreateCouponRequest;
-import com.bookstore.dto.request.SetAccountLevelRequest;
 import com.bookstore.dto.request.UpdateOrderStatusRequest;
 import com.bookstore.model.Coupon;
 import com.bookstore.model.Order;
@@ -51,13 +50,6 @@ public class AdminController {
             @PathVariable String userId,
             @Valid @RequestBody AdjustBalanceRequest req) {
         return ResponseEntity.ok(adminService.debitCustomer(userId, req));
-    }
-
-    @PatchMapping("/customers/{userId}/level")
-    public ResponseEntity<Map<String, Object>> setCustomerLevel(
-            @PathVariable String userId,
-            @Valid @RequestBody SetAccountLevelRequest req) {
-        return ResponseEntity.ok(adminService.setCustomerLevel(userId, req.getLevel()));
     }
 
     // ── Orders ───────────────────────────────────────────────────────────────

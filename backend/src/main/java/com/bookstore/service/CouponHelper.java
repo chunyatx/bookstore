@@ -20,9 +20,9 @@ public class CouponHelper {
     /**
      * Looks up and validates a coupon by code. Throws IllegalArgumentException if invalid.
      *
-     * @param accountLevel the current user's account level (nullable); checked against coupon restriction
+     * @param userId the ID of the user attempting to use the coupon
      */
-    public Coupon validateCoupon(String code, double subtotal, Instant userRegisteredAt, String accountLevel) {
+    public Coupon validateCoupon(String code, double subtotal, Instant userRegisteredAt, String userId) {
         Coupon coupon = couponRepository.findByCode(code.toUpperCase())
                 .orElseThrow(() -> new IllegalArgumentException("Coupon code not found: " + code));
         if (!coupon.isActive()) {
@@ -51,10 +51,9 @@ public class CouponHelper {
                         + coupon.getNewUserOnlyDays() + " days of registration");
             }
         }
-        if (coupon.getAccountLevel() != null) {
-            if (accountLevel == null || !coupon.getAccountLevel().equalsIgnoreCase(accountLevel)) {
-                throw new IllegalArgumentException(
-                        "Coupon is restricted to account level: " + coupon.getAccountLevel());
+        if (coupon.getAllowedUserId() != null) {
+            if (!coupon.getAllowedUserId().equals(userId)) {
+                throw new IllegalArgumentException("Coupon is not valid for this account");
             }
         }
         return coupon;
@@ -63,11 +62,11 @@ public class CouponHelper {
     /**
      * Attempts validation — returns coupon or null if invalid (silent, for checkout).
      *
-     * @param accountLevel the current user's account level (nullable)
+     * @param userId the ID of the user attempting to use the coupon
      */
-    public Coupon tryValidateCoupon(String code, double subtotal, Instant userRegisteredAt, String accountLevel) {
+    public Coupon tryValidateCoupon(String code, double subtotal, Instant userRegisteredAt, String userId) {
         try {
-            return validateCoupon(code, subtotal, userRegisteredAt, accountLevel);
+            return validateCoupon(code, subtotal, userRegisteredAt, userId);
         } catch (IllegalArgumentException e) {
             return null;
         }

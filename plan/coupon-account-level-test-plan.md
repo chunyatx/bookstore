@@ -1,8 +1,11 @@
-# Test Plan — Coupon Account-Level Restriction
+# Test Plan — Coupon Account-Identity Restriction
 
-**Feature:** Coupons can be restricted to accounts assigned a specific account level.
-A coupon with `accountLevel = "A00001"` may only be applied by users whose account
-has been assigned level `"A00001"` by an admin.
+**Feature:** A coupon can be restricted to a specific account (user) by ID.
+When a coupon has `allowedUserId` set, only the account whose ID matches
+may apply or redeem it. All other accounts receive a rejection.
+
+Example: coupon `NEWIT` with `allowedUserId = "user-uuid-of-A00001"` can
+only be applied by that specific user.
 
 **Date:** 2026-03-10
 
@@ -20,219 +23,166 @@ has been assigned level `"A00001"` by an admin.
 
 ## 1. CouponHelper Unit Tests
 
-### 1.1 Level-restricted coupon — matching level → valid
-- Setup: coupon with `accountLevel = "A00001"`, account level `"A00001"`
-- Call: `validateCoupon(code, subtotal, userRegisteredAt, "A00001")`
+### 1.1 Account-restricted coupon — matching userId → valid
+- Setup: coupon with `allowedUserId = "user-A"`, caller userId `"user-A"`
+- Call: `validateCoupon(code, subtotal, userRegisteredAt, "user-A")`
 - Expect: coupon returned, no exception
 
-### 1.2 Level-restricted coupon — wrong level → throws
-- Setup: coupon with `accountLevel = "A00001"`, account level `"B00001"`
-- Call: `validateCoupon(code, subtotal, userRegisteredAt, "B00001")`
-- Expect: `IllegalArgumentException` with message containing `"A00001"`
+### 1.2 Account-restricted coupon — different userId → throws
+- Setup: coupon with `allowedUserId = "user-A"`, caller userId `"user-B"`
+- Call: `validateCoupon(code, subtotal, userRegisteredAt, "user-B")`
+- Expect: `IllegalArgumentException("Coupon is not valid for this account")`
 
-### 1.3 Level-restricted coupon — null account level → throws
-- Setup: coupon with `accountLevel = "A00001"`, no account found (level = null)
-- Call: `validateCoupon(code, subtotal, userRegisteredAt, null)`
+### 1.3 Account-restricted coupon — null userId → throws
+- Setup: coupon with `allowedUserId = "user-A"`, caller userId `null`
 - Expect: `IllegalArgumentException`
 
-### 1.4 Level-restricted coupon — case-insensitive match → valid
-- Setup: coupon with `accountLevel = "gold"`, account level `"GOLD"`
-- Call: `validateCoupon(code, subtotal, userRegisteredAt, "GOLD")`
-- Expect: coupon returned (case-insensitive comparison)
-
-### 1.5 No level restriction — any account level → valid
-- Setup: coupon with `accountLevel = null`
-- Call: `validateCoupon(code, subtotal, userRegisteredAt, "anything")` and with `null`
-- Expect: coupon returned in both cases
-
-### 1.6 tryValidateCoupon — wrong level → returns null (silent)
-- Setup: coupon with `accountLevel = "A00001"`, account level `"X99"`
-- Call: `tryValidateCoupon(code, subtotal, userRegisteredAt, "X99")`
-- Expect: `null` returned (no exception)
-
-### 1.7 tryValidateCoupon — matching level → returns coupon
-- Setup: coupon with `accountLevel = "A00001"`, account level `"A00001"`
-- Call: `tryValidateCoupon(code, subtotal, userRegisteredAt, "A00001")`
+### 1.4 No allowedUserId restriction — any userId → valid
+- Setup: coupon with `allowedUserId = null`
+- Call: `validateCoupon(code, subtotal, userRegisteredAt, "any-user")`
 - Expect: coupon returned
 
-### 1.8 Level restriction combined with other constraints — all pass → valid
-- Setup: coupon with `accountLevel = "VIP"`, `minOrderAmount = 50`, not expired
-- Account level `"VIP"`, subtotal = 100
+### 1.5 No allowedUserId restriction — null userId → valid (other checks still apply)
+- Setup: coupon with `allowedUserId = null`, no new-user restriction
+- Call: `validateCoupon(code, subtotal, null, null)`
+- Expect: coupon returned (userId ignored when no restriction set)
+
+### 1.6 tryValidateCoupon — wrong userId → returns null (silent)
+- Setup: coupon with `allowedUserId = "user-A"`, caller `"user-B"`
+- Call: `tryValidateCoupon(code, subtotal, userRegisteredAt, "user-B")`
+- Expect: `null` (no exception propagated)
+
+### 1.7 tryValidateCoupon — matching userId → returns coupon
+- Setup: coupon with `allowedUserId = "user-A"`, caller `"user-A"`
+- Call: `tryValidateCoupon(code, subtotal, userRegisteredAt, "user-A")`
 - Expect: coupon returned
 
-### 1.9 Level restriction combined with other constraints — level fails but min order also fails
-- Setup: coupon with `accountLevel = "VIP"`, `minOrderAmount = 50`
-- Account level `"BASIC"`, subtotal = 10
-- Expect: `IllegalArgumentException` (first failing check wins — order of checks matters)
+### 1.8 allowedUserId combined with other constraints — all pass → valid
+- Setup: coupon with `allowedUserId = "user-A"`, `minOrderAmount = 50`, active, not expired
+- Subtotal = 100, caller = `"user-A"`
+- Expect: coupon returned
+
+### 1.9 allowedUserId check is last — other constraint fails first
+- Setup: coupon with `allowedUserId = "user-A"`, `isActive = false`
+- Caller = `"user-A"`
+- Expect: `IllegalArgumentException("Coupon is not active")` — active check fires before identity check
 
 ---
 
 ## 2. CartService Unit Tests
 
-### 2.1 applyCoupon — account has matching level → coupon applied
-- Setup: user, account with `level = "A00001"`, coupon restricted to `"A00001"`, valid subtotal
-- Call: `applyCoupon(userId, req)`
+### 2.1 applyCoupon — caller is the allowed user → coupon applied
+- Setup: user with id `"user-A"`, coupon with `allowedUserId = "user-A"`, valid subtotal
+- Call: `applyCoupon("user-A", req)`
 - Expect: cart saved with `couponCode` set, enriched response shows discount
 
-### 2.2 applyCoupon — account level mismatch → 400 BAD_REQUEST
-- Setup: user, account with `level = "B00001"`, coupon restricted to `"A00001"`
-- Call: `applyCoupon(userId, req)`
-- Expect: `ResponseStatusException` with status 400, message about account level
+### 2.2 applyCoupon — caller is a different user → 400 BAD_REQUEST
+- Setup: user `"user-B"`, coupon with `allowedUserId = "user-A"`
+- Call: `applyCoupon("user-B", req)`
+- Expect: `ResponseStatusException` 400 with message about account restriction
 
-### 2.3 applyCoupon — account has no level, coupon restricted → 400 BAD_REQUEST
-- Setup: user, account with `level = null`, coupon restricted to `"A00001"`
-- Call: `applyCoupon(userId, req)`
-- Expect: 400 error
-
-### 2.4 applyCoupon — coupon unrestricted, account has a level → applied
-- Setup: user, account with `level = "VIP"`, coupon with `accountLevel = null`
-- Call: `applyCoupon(userId, req)`
+### 2.3 applyCoupon — unrestricted coupon, any user → applied
+- Setup: coupon with `allowedUserId = null`
+- Call: `applyCoupon("any-user", req)`
 - Expect: coupon applied successfully
 
-### 2.5 enrichCart — level-restricted coupon becomes invalid after level removed → silently cleared
-- Setup: cart with `couponCode` for level-restricted coupon; account level changed to non-matching
-- Call: `enrichCart(cart)`
-- Expect: coupon silently cleared, `couponCode = null`, `discountAmount = 0`
+### 2.4 enrichCart — restricted coupon was applied but cart now belongs to different user context
+- (edge case: not normally reachable via API, but defensive test)
+- Setup: cart with restricted coupon code for `"user-A"`, enriched as `"user-B"`
+- Expect: coupon silently cleared (tryValidateCoupon returns null)
 
 ---
 
 ## 3. OrderService Unit Tests
 
-### 3.1 placeOrder — level-restricted coupon, account has matching level → discount applied
-- Setup: user, account with `level = "A00001"`, cart with valid coupon restricted to `"A00001"`
-- Call: `placeOrder(userId)`
-- Expect: order created with `discountAmount > 0`, `couponCode` set, `usedCount` incremented
+### 3.1 placeOrder — caller is the allowed user, coupon applied → discount applied
+- Setup: coupon with `allowedUserId = "user-A"`, cart belongs to `"user-A"` with coupon
+- Call: `placeOrder("user-A")`
+- Expect: order with `discountAmount > 0`, `couponCode` set, `usedCount` incremented
 
-### 3.2 placeOrder — level-restricted coupon, account level mismatch → coupon silently ignored
-- Setup: user, account with `level = "B00001"`, cart with coupon restricted to `"A00001"`
-- Call: `placeOrder(userId)`
-- Expect: order created with `discountAmount = 0`, `couponCode = null`, full price charged
+### 3.2 placeOrder — coupon applied by allowed user but at checkout coupon restricted to someone else (data anomaly) → silently dropped
+- Setup: coupon's `allowedUserId = "user-B"`, cart for `"user-A"` somehow has that coupon code
+- Call: `placeOrder("user-A")`
+- Expect: order created with `discountAmount = 0`, `couponCode = null`
 
-### 3.3 placeOrder — no coupon, account has a level → order unaffected
-- Setup: user, account with `level = "A00001"`, cart with no coupon
-- Call: `placeOrder(userId)`
-- Expect: order created normally, no discount
+### 3.3 placeOrder — no coupon, unrestricted user → order normal
+- Setup: coupon with no `allowedUserId`, cart has no coupon
+- Expect: order created without discount, wallet charged full subtotal
 
 ---
 
 ## 4. AdminService Unit Tests
 
-### 4.1 createCoupon — with accountLevel → persisted
-- Setup: `CreateCouponRequest` with `accountLevel = "A00001"`
+### 4.1 createCoupon — with allowedUserId → persisted on coupon
+- Setup: `CreateCouponRequest` with `allowedUserId = "user-uuid-123"`
 - Call: `createCoupon(req)`
-- Expect: saved coupon has `getAccountLevel() == "A00001"`
+- Expect: saved coupon has `getAllowedUserId() == "user-uuid-123"`
 
-### 4.2 createCoupon — without accountLevel (null) → no restriction
-- Setup: `CreateCouponRequest` with `accountLevel = null`
+### 4.2 createCoupon — without allowedUserId (null) → no restriction
+- Setup: `CreateCouponRequest` with `allowedUserId = null`
 - Call: `createCoupon(req)`
-- Expect: saved coupon has `getAccountLevel() == null`
+- Expect: saved coupon has `getAllowedUserId() == null`
 
-### 4.3 setCustomerLevel — valid userId → account level updated
-- Setup: existing user and account with `level = null`
-- Call: `setCustomerLevel(userId, "A00001")`
-- Expect: account `level` field set to `"A00001"`, response map contains `userId` and `level`
-
-### 4.4 setCustomerLevel — unknown userId → 404
-- Setup: userId not in repository
-- Call: `setCustomerLevel(unknownId, "A00001")`
-- Expect: `ResponseStatusException` with status 404
-
-### 4.5 setCustomerLevel — blank level → clears level (null)
-- Setup: account with existing `level = "A00001"`
-- Call: `setCustomerLevel(userId, "")` or `setCustomerLevel(userId, null)`
-- Expect: account `level` set to `null`
-
-### 4.6 listCustomers — includes accountLevel in response map
-- Setup: two customers, one with level `"A00001"`, one with `null`
-- Call: `listCustomers()`
-- Expect: response maps include `"accountLevel"` key with correct values
+### 4.3 createCoupon — blank allowedUserId trimmed to null
+- Setup: `CreateCouponRequest` with `allowedUserId = "  "`
+- Expect: `getAllowedUserId()` returns `null` (trimmed blank → null)
 
 ---
 
 ## 5. Integration Tests
 
-### 5.1 POST /api/admin/coupons — create level-restricted coupon
+### 5.1 POST /api/admin/coupons — create account-restricted coupon
 - Auth: admin JWT
-- Body: `{ code: "NEWIT", type: "fixed", value: 5, description: "...", accountLevel: "A00001" }`
-- Expect: 201, response body includes `accountLevel: "A00001"`
+- Body: `{ code: "NEWIT", type: "fixed", value: 5, description: "...", allowedUserId: "<target-user-id>" }`
+- Expect: 201, response body includes `allowedUserId: "<target-user-id>"`
 
-### 5.2 POST /api/cart/coupon — user with matching level applies restricted coupon → 200
-- Setup: admin creates coupon `NEWIT` restricted to `"A00001"`, admin sets user's level to `"A00001"`, user adds item to cart
-- Auth: user JWT
+### 5.2 POST /api/cart/coupon — allowed user applies restricted coupon → 200
+- Setup: register target user, get their UUID; admin creates coupon `NEWIT` with that UUID as `allowedUserId`; user adds item to cart
+- Auth: target user JWT
 - Body: `{ code: "NEWIT" }`
 - Expect: 200, response includes `couponCode: "NEWIT"`, `discountAmount > 0`
 
-### 5.3 POST /api/cart/coupon — user with wrong level → 400
-- Setup: coupon restricted to `"A00001"`, user's account level is `"B00001"`
-- Auth: user JWT
-- Body: `{ code: "NEWIT" }`
-- Expect: 400, error message references account level restriction
+### 5.3 POST /api/cart/coupon — different user tries restricted coupon → 400
+- Setup: same coupon `NEWIT` restricted to user-A; request made by user-B
+- Auth: user-B JWT
+- Expect: 400, error message indicates coupon is not valid for this account
 
-### 5.4 POST /api/cart/coupon — user with no level → 400
-- Setup: coupon restricted to `"A00001"`, user has no account level assigned
-- Expect: 400
+### 5.4 POST /api/cart/coupon — unrestricted coupon, any user → 200
+- Setup: coupon with no `allowedUserId`
+- Expect: 200, any authenticated user can apply it
 
-### 5.5 POST /api/cart/coupon — unrestricted coupon, user has a level → 200
-- Setup: coupon with no `accountLevel`, user with any level
-- Expect: 200, coupon applied
-
-### 5.6 PATCH /api/admin/customers/:id/level — set level → 200
-- Auth: admin JWT
-- Body: `{ level: "A00001" }`
-- Expect: 200, response `{ userId, level: "A00001" }`
-
-### 5.7 PATCH /api/admin/customers/:id/level — clear level (blank) → 200
-- Auth: admin JWT
-- Body: `{ level: "" }`
-- Expect: 200, subsequent GET /api/admin/customers shows `accountLevel: null`
-
-### 5.8 PATCH /api/admin/customers/:id/level — unknown user → 404
-- Auth: admin JWT
-- Expect: 404
-
-### 5.9 PATCH /api/admin/customers/:id/level — customer auth (non-admin) → 403
-- Auth: customer JWT
-- Expect: 403
-
-### 5.10 POST /api/orders — place order with level-matched coupon → discount reflected
-- Setup: coupon restricted to `"A00001"`, user level `"A00001"`, coupon applied to cart
+### 5.5 POST /api/orders — allowed user redeems restricted coupon → discount in order
+- Setup: coupon restricted to user-A, user-A applies it to cart
 - Call: `POST /api/orders`
-- Expect: 201, `discountAmount > 0`, `couponCode` set, wallet deducted at discounted total
+- Expect: 201, `discountAmount > 0`, `couponCode` set, `usedCount` incremented to 1,
+  wallet deducted at discounted total
 
-### 5.11 POST /api/orders — level changes between apply and checkout → coupon silently dropped
-- Setup: coupon restricted to `"A00001"`, user level `"A00001"`, coupon applied to cart,
-  then admin changes user level to `"B00001"` before order is placed
-- Call: `POST /api/orders`
+### 5.6 POST /api/orders — wrong user, coupon silently dropped at checkout
+- Setup: coupon restricted to user-A (somehow present on user-B's cart)
+- Call: `POST /api/orders` as user-B
 - Expect: 201, `discountAmount = 0`, `couponCode = null`, full price charged
 
-### 5.12 GET /api/admin/customers — accountLevel shown in list
+### 5.7 GET /api/admin/coupons — allowedUserId shown in list
 - Auth: admin JWT
-- Setup: one customer has level `"A00001"`, another has none
-- Expect: 200, each customer object includes `accountLevel` field
+- Setup: one coupon with `allowedUserId` set, one without
+- Expect: 200, `allowedUserId` field present on each coupon object (null when unrestricted)
 
 ---
 
 ## Test Data Conventions
 
 - Use `UUID`-based unique emails and coupon codes per test (no hardcoding)
-- Account level values: `"A00001"`, `"B00001"`, `"VIP"`, `"GOLD"` for variety
-- Seed wallet balance before placing orders
-
----
-
-## Non-Goals
-
-- Frontend E2E tests (out of scope for unit/integration plan)
-- Load / performance tests for level lookup
+- Seed wallet balance (via admin credit) before placing orders
+- Look up the target user's UUID from `/api/admin/customers` or register response
 
 ---
 
 ## Notes on Implementation
 
-- `CouponHelper.validateCoupon()` and `tryValidateCoupon()` now take a 4th argument
-  `String accountLevel`. All callers (`CartService`, `OrderService`) pass `account.getLevel()`.
-- Account level comparison is **case-insensitive** (`equalsIgnoreCase`).
-- A `null` coupon `accountLevel` means **no restriction** — all accounts may use it.
-- A `null` account `level` (unassigned) will **fail** any level-restricted coupon check.
-- Existing tests for `CouponHelper`, `CartService`, `OrderService` that use the 3-arg
-  overloads must be updated to the 4-arg signatures (pass `null` as `accountLevel`).
+- `CouponHelper.validateCoupon()` and `tryValidateCoupon()` take a 4th argument `String userId`.
+  All callers (`CartService`, `OrderService`) pass the authenticated user's ID directly —
+  no additional repository lookup is required.
+- `null` coupon `allowedUserId` means **no restriction** — any account may use the coupon.
+- Matching is exact (`.equals()`), not case-insensitive, since user IDs are UUIDs.
+- Existing tests for `CouponHelper`, `CartService`, `OrderService` that used the old 3-arg
+  overloads must be updated to the 4-arg signatures (pass `null` or appropriate userId).

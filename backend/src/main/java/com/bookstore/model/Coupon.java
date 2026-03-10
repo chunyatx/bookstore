@@ -45,8 +45,8 @@ public class Coupon {
     @Column(name = "NEW_USER_ONLY_DAYS")
     private Integer newUserOnlyDays;
 
-    @Column(name = "COUPON_ACCT_LEVEL", length = 50)
-    private String accountLevel;
+    @Column(name = "ALLOWED_USER_ID", length = 36)
+    private String allowedUserId;
 
     public Coupon() {}
 
@@ -74,6 +74,6 @@ public class Coupon {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Integer getNewUserOnlyDays() { return newUserOnlyDays; }
     public void setNewUserOnlyDays(Integer newUserOnlyDays) { this.newUserOnlyDays = newUserOnlyDays; }
-    public String getAccountLevel() { return accountLevel; }
-    public void setAccountLevel(String accountLevel) { this.accountLevel = accountLevel; }
+    public String getAllowedUserId() { return allowedUserId; }
+    public void setAllowedUserId(String allowedUserId) { this.allowedUserId = allowedUserId; }
 }

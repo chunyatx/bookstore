@@ -31,7 +31,6 @@ import { ToastService } from '../../../services/toast.service';
             <th>Email</th>
             <th>Balance</th>
             <th>Orders</th>
-            <th>Level</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -41,12 +40,10 @@ import { ToastService } from '../../../services/toast.service';
             <td>{{ c.email }}</td>
             <td>\${{ c.balance | number:'1.2-2' }}</td>
             <td>{{ c.orderCount }}</td>
-            <td>{{ c.accountLevel ?? '—' }}</td>
             <td>
               <button class="btn btn-sm btn-secondary" (click)="viewDetail(c.id)">Details</button>
               <button class="btn btn-sm btn-success" style="margin-left:6px;" (click)="openAdjust(c, 'credit')">Credit</button>
               <button class="btn btn-sm btn-danger" style="margin-left:4px;" (click)="openAdjust(c, 'debit')">Debit</button>
-              <button class="btn btn-sm btn-secondary" style="margin-left:4px;" (click)="openSetLevel(c)">Set Level</button>
             </td>
           </tr>
         </tbody>
@@ -66,21 +63,6 @@ import { ToastService } from '../../../services/toast.service';
           </span>
           — {{ tx.description }}
           <span style="color:#9ca3af;"> ({{ tx.createdAt | date:'short' }})</span>
-        </div>
-      </div>
-
-      <!-- Set Level modal -->
-      <div class="modal-overlay" *ngIf="levelModal()">
-        <div class="modal">
-          <h3>Set Account Level — {{ levelTarget()?.name }}</h3>
-          <div class="form-group">
-            <label>Account Level (blank to clear)</label>
-            <input [(ngModel)]="levelValue" placeholder="e.g. A00001" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;">
-          </div>
-          <div style="display:flex;gap:8px;margin-top:16px;">
-            <button class="btn btn-secondary" (click)="levelModal.set(false)">Cancel</button>
-            <button class="btn btn-primary" (click)="submitSetLevel()">Save</button>
-          </div>
         </div>
       </div>
 
@@ -114,10 +96,6 @@ export class AdminCustomersComponent implements OnInit {
   adjustAmount = 0;
   adjustDescription = '';
 
-  levelModal = signal(false);
-  levelTarget = signal<CustomerSummary | null>(null);
-  levelValue = '';
-
   constructor(private adminService: AdminService, private toast: ToastService) {}
 
   ngOnInit(): void {
@@ -134,25 +112,6 @@ export class AdminCustomersComponent implements OnInit {
     this.adjustAmount = 0;
     this.adjustDescription = '';
     this.adjustModal.set(true);
-  }
-
-  openSetLevel(customer: CustomerSummary): void {
-    this.levelTarget.set(customer);
-    this.levelValue = customer.accountLevel ?? '';
-    this.levelModal.set(true);
-  }
-
-  submitSetLevel(): void {
-    const target = this.levelTarget();
-    if (!target) return;
-    this.adminService.setCustomerLevel(target.id, this.levelValue.trim() || null).subscribe({
-      next: () => {
-        this.toast.show('Account level updated', 'success');
-        this.levelModal.set(false);
-        this.adminService.listCustomers().subscribe(cs => this.customers.set(cs));
-      },
-      error: (err) => this.toast.show(err.error?.error ?? 'Update failed', 'error')
-    });
   }
 
   submitAdjust(): void {
